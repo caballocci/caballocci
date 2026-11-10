@@ -18,7 +18,7 @@ import { EditorMediaPicker } from './EditorMediaPicker'
 import { Preview } from './EditorMediaPreview'
 import './editor.css'
 
-export function Editor({ initial, scheduledAtForNew = null, spaceForNew, sessionPosts = [], onSessionNavigate, onSessionAdd, onSessionClose, onClose, minimized: minimizedProp, onMinimizedChange, boardPick = false, mediaAttachment, showMediaPickerInEditor = true }: { initial: Post | null; scheduledAtForNew?: string | null; spaceForNew?: string | null; sessionPosts?: Post[]; onSessionNavigate?(id: string): void; onSessionAdd?(id: string): void; onSessionClose?(id: string, nextId: string | null): void; onClose(): void; minimized?: boolean; onMinimizedChange?(minimized: boolean): void; boardPick?: boolean; mediaAttachment?: { id: string; postId: string; assets: MediaAsset[] } | null; showMediaPickerInEditor?: boolean }) {
+export function Editor({ initial, scheduledAtForNew = null, spaceForNew, collectionForNew = null, sessionPosts = [], onSessionNavigate, onSessionAdd, onSessionClose, onClose, minimized: minimizedProp, onMinimizedChange, boardPick = false, mediaAttachment, showMediaPickerInEditor = true }: { initial: Post | null; scheduledAtForNew?: string | null; spaceForNew?: string | null; collectionForNew?: string | null; sessionPosts?: Post[]; onSessionNavigate?(id: string): void; onSessionAdd?(id: string): void; onSessionClose?(id: string, nextId: string | null): void; onClose(): void; minimized?: boolean; onMinimizedChange?(minimized: boolean): void; boardPick?: boolean; mediaAttachment?: { id: string; postId: string; assets: MediaAsset[] } | null; showMediaPickerInEditor?: boolean }) {
   const { save, remove, uncombinePost, activeSpace, customSpaces, posts, ideas, selectIdea, setView, quickWrites: quickWritesBySpace, spaceKey, saveQuickWrites } = usePlanner()
   const draftKey = `caballocci.draft.${initial?.id || 'new'}`
   const project = spaceForNew === undefined ? activeSpace || 'Mi contenido' : spaceForNew || 'Mi contenido'
@@ -327,6 +327,13 @@ export function Editor({ initial, scheduledAtForNew = null, spaceForNew, session
     setSaving(true)
     try {
       const savedPost = await save(draft)
+      // Si se creó desde una colección del tablero, la publicación nace dentro de ella.
+      if (!initial && collectionForNew && savedPost) {
+        const group = usePlanner.getState().workGroups.find(item => item.id === collectionForNew && !item.archivedAt)
+        if (group && !group.postIds.includes(savedPost.id) && (!group.space || savedPost.project === group.space)) {
+          await usePlanner.getState().setWorkGroupPosts(group.id, [...group.postIds, savedPost.id])
+        }
+      }
       lastSavedDraft.current = JSON.stringify(draft)
       setSaveState('saved')
       recordPersistedSchedule({ id: savedPost?.id ?? draft.id, scheduledAt: draft.scheduledAt })
