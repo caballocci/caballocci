@@ -413,6 +413,19 @@ export function validateClipboardText(value: unknown) {
   return text(value, 'text', 200_000)
 }
 
+/** Texto plano obligatorio; HTML opcional (transporta el manifiesto semántico). */
+export interface ClipboardWriteRequest {
+  text: string
+  html?: string
+}
+
+export function validateClipboardWrite(args: unknown[]): ClipboardWriteRequest {
+  if (args.length !== 1 && args.length !== 2) invalid('count')
+  const request: ClipboardWriteRequest = { text: validateClipboardText(args[0]) }
+  if (args.length === 1 || typeof args[1] !== 'string' || args[1].length === 0) return request
+  return { ...request, html: text(args[1], 'html', 1_000_000) }
+}
+
 export function validateMediaMode(value: unknown) {
   return enumValue(value, 'mode', mediaModes)
 }

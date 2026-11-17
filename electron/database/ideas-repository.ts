@@ -41,7 +41,7 @@ export class IdeasRepository {
         this.db.run('INSERT OR REPLACE INTO ideas (id,space,title,body,tags,media,status,priority,due_at,post_id,combined_post_id,created_at,updated_at,content_hash,source_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [id, String(input.space || 'Mi contenido'), String(input.title || ''), String(input.body || ''), JSON.stringify(input.tags || []), JSON.stringify(input.media || []), String(input.status || 'inbox'), String(input.priority || 'normal'), input.dueDate ? String(input.dueDate) : null, null, null, String(input.createdAt || now), now, hash, String(input.sourceName || '')])
         this.event('idea_created', 'idea', id, { title: String(input.title || '') }, now); const saved = this.get(id); if (saved) created.push(saved); byHash.set(hash, { id, title: String(input.title || ''), source_name: String(input.sourceName || ''), content_hash: hash })
       }
-      const first = inputs[0]; if (first) this.db.run('INSERT INTO idea_import_runs (id,file_name,space,total,created,skipped,imported_at) VALUES (?,?,?,?,?,?,?)', [crypto.randomUUID(), String(first.sourceName || 'ImportaciÃ³n manual'), String(first.space || ''), inputs.length, created.length, skipped, new Date().toISOString()])
+      const first = inputs[0]; if (first) this.db.run('INSERT INTO idea_import_runs (id,file_name,space,total,created,skipped,imported_at) VALUES (?,?,?,?,?,?,?)', [crypto.randomUUID(), String(first.sourceName || 'Importación manual'), String(first.space || ''), inputs.length, created.length, skipped, new Date().toISOString()])
       this.db.run('COMMIT'); if (inputs.length) this.persist(); return { created, skipped, duplicates }
     } catch (error) { this.db.run('ROLLBACK'); throw error }
   }

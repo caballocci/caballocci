@@ -14,7 +14,7 @@ import { registerMobileSyncIpcHandlers } from './mobile-sync-ipc-handlers'
 import { registerMediaIpcHandlers } from './media-ipc-handlers'
 import { registerConceptMapIpcHandlers } from './concept-map-ipc-handlers'
 import { registerPostsIpcHandlers } from './posts-ipc-handlers'
-import { validateArgumentCount, validateClipboardText, validateId, validateNoArguments } from './ipc-validation'
+import { validateArgumentCount, validateClipboardWrite, validateId, validateNoArguments } from './ipc-validation'
 import { UpdateManager } from './updater'
 import { createStartupSplashWindow } from './splash'
 
@@ -801,8 +801,17 @@ app.whenReady().then(async () => {
   registerIdeaIpcHandlers({ database, handle, withoutArguments, mapIdea, mapPost, mapIdeaNeighbor, ensurePostMediaFolder })
   registerConceptMapIpcHandlers({ database, handle, withoutArguments })
   handle('clipboard:write', args => {
-    validateArgumentCount(args, 1)
-    clipboard.writeText(validateClipboardText(args[0]))
+    const request = validateClipboardWrite(args)
+    if (request.html) clipboard.write({ text: request.text, html: request.html })
+    else clipboard.writeText(request.text)
+  })
+  handle('clipboard:read-html', args => {
+    validateNoArguments(args)
+    return clipboard.readHTML()
+  })
+  handle('clipboard:read-text', args => {
+    validateNoArguments(args)
+    return clipboard.readText()
   })
   handle('preferences:sync', args => {
     validateArgumentCount(args, 1)

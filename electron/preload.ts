@@ -141,7 +141,7 @@ contextBridge.exposeInMainWorld('planner', {
     imageUrl: (id: string) => `caballocci-media://asset/${encodeURIComponent(id)}`,
   },
   files: { readText: () => ipcRenderer.invoke('files:read-text') },
-  clipboard: { write: (text: string) => ipcRenderer.invoke('clipboard:write', text) },
+  clipboard: { write: (text: string, html?: string) => ipcRenderer.invoke('clipboard:write', text, html), readHtml: () => ipcRenderer.invoke('clipboard:read-html'), readText: () => ipcRenderer.invoke('clipboard:read-text') },
   preferences: { sync: (entries: Record<string, string>) => ipcRenderer.invoke('preferences:sync', entries), remove: (key: string) => ipcRenderer.invoke('preferences:remove', key) },
   system: {
     info: () => ipcRenderer.invoke('system:info'),

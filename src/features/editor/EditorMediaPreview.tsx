@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { createPortal } from 'react-dom'
 import { Archive, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clipboard, Copy, Database, Edit3, ExternalLink, FileImage, FolderOpen, FolderPlus, GripVertical, Hash, Instagram, Lightbulb, MessageCircle, MoreHorizontal, Plus, Redo2, Smartphone, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { contentLabels, getPlatformMeta, platformMeta, statusMeta } from '../../shared/constants'
+import { withClipboardPayload } from '../../shared/clipboard-payload'
 import { PlatformMark } from '../../components/layout/AppShell'
 import { MobileAppDownload } from '../../components/MobileAppDownload'
 import { reportAppError, runWithErrorReporting } from '../../app/errors'
@@ -236,7 +237,7 @@ export function Preview({ draft, onMediaChange, onError }: { draft: PostInput; o
       <div className="preview-actions"><MessageCircle /><Archive /><Clipboard /></div>
       <p><strong>tu_cuenta </strong>{text || 'Aquí aparecerá el texto de tu publicación.'}</p>
     </div>
-    <button className="copy-helper" onClick={() => window.planner.clipboard.write(text)}><Clipboard size={16} /> Copiar texto para publicar</button>
+    <button className="copy-helper" onClick={() => { const request = withClipboardPayload(text, [{ kind: 'field', field: 'caption', text }]); void window.planner.clipboard.write(request.text, request.html) }}><Clipboard size={16} /> Copiar texto para publicar</button>
     {groupDialog && <div className="space-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setGroupDialog(null) }}><form className="space-dialog" onSubmit={event => { event.preventDefault(); void saveGroup() }}><header><div><span>{groupDialog.currentName ? 'RENOMBRAR CARPETA' : 'NUEVA CARPETA'}</span><h2>Carpeta de diapositivas</h2></div><button type="button" className="icon-button" aria-label="Cerrar" onClick={() => setGroupDialog(null)}><X size={18} /></button></header><label>Nombre<input autoFocus maxLength={120} value={groupDialog.name} onChange={event => setGroupDialog(current => current ? { ...current, name: event.target.value } : current)} /></label><footer><button type="button" className="ghost-button" onClick={() => setGroupDialog(null)}>Cancelar</button><button className="save-button" disabled={!groupDialog.name.trim() || groupDialog.name.trim() === groupDialog.currentName}>Guardar carpeta</button></footer></form></div>}
     {assetMenu && createPortal(<div ref={assetMenuRef} className="media-asset-context-menu" role="menu" aria-label="Acciones de imagen" style={{ left: Math.max(8, Math.min(assetMenu.x, window.innerWidth - 196)), top: Math.max(8, Math.min(assetMenu.y, window.innerHeight - 116)) }} onPointerDown={event => event.stopPropagation()}>
       <button type="button" role="menuitem" disabled={assetActionBusy} onClick={() => void manageAsset('duplicate')}><Copy size={14} />Duplicar en esta publicación</button>

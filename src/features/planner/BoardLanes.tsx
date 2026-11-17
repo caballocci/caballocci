@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MobileCardStatus, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
+import { withClipboardPayload } from '../../shared/clipboard-payload'
 import { BoardContextMenu, BoardContextSelectionActions } from './BoardContextMenu'
+import { PostCopyDialog } from './PostCopyDialog'
+import { ApplyFieldsDialog } from './ApplyFieldsDialog'
+import { PasteFormatHint } from './PasteFormatHint'
+import { availableParsedFields, groupPayloadPosts, isStructuredPostText, parsePostsFromText, readClipboardPayload, type ClipboardPasteSource, type ClipboardPostField, type ParsedPost } from '../../shared/clipboard-payload'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, ClipboardCopy, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers3, MoreHorizontal, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers3, MoreHorizontal, Replace, Trash2 } from 'lucide-react'
 import { contentLabels, stages, statusMeta } from '../../shared/constants'
 import { postColors } from '../../shared/postColors'
 import { runWithErrorReporting } from '../../app/errors'
@@ -37,7 +42,7 @@ function setCardDragImage(event: React.DragEvent<HTMLElement>, count: number) {
   setTimeout(() => ghost.remove(), 0)
 }
 
-export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLanes, toggleLane, reorderLane, visiblePerColumn, mobilePublicationState, boardCardDetailLevel, dragIds, onToggle, onSelect, onPickPost, pickedPostIds = new Set<string>(), onColor, onMove, onSelectStatus, onDuplicate, onDelete, onStatus, onEditSelection, onArchive, scheduleAt, scheduleWarning, onScheduleAtChange, onSchedule, onClearSchedule, onFormat }: {
+export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLanes, toggleLane, reorderLane, visiblePerColumn, mobilePublicationState, boardCardDetailLevel, dragIds, onToggle, onSelect, onPickPost, pickedPostIds = new Set<string>(), onColor, onMove, onSelectStatus, onDuplicate, onPastePosts, onOpenPasteDialog, allPosts, onApplyFields, onDelete, onStatus, onEditSelection, onArchive, scheduleAt, scheduleWarning, onScheduleAtChange, onSchedule, onClearSchedule, onFormat }: {
   lanes: BoardLane[]; posts: Post[]; activeGroups: WorkGroup[]; selected: Set<string>; collapsedLanes: Set<string>
   toggleLane(id: string): void; reorderLane(id: string, delta: number): void; visiblePerColumn: number
   mobilePublicationState: MobilePublicationState | null; boardCardDetailLevel: BoardCardDetailLevel
@@ -45,6 +50,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
   onToggle(id: string, range?: boolean, order?: string[]): void; onSelect(id: string | null): void; onPickPost?(id: string): boolean; pickedPostIds?: Set<string>
   onColor(post: Post, color: string): void; onMove(status: Post['status']): void; onSelectStatus(ids: string[]): void
   onDuplicate(post: Post): Promise<Post | undefined>; onDelete(post: Post): void; onStatus(post: Post, status: Post['status']): void
+  onPastePosts(target: Post): Promise<Post[] | undefined>; onOpenPasteDialog(target: Post): void; allPosts: Post[]; onApplyFields(targets: Post[], fields: ClipboardPostField[], includeSlides: boolean): Promise<void>
   onEditSelection(): void
   scheduleAt: string; scheduleWarning: string; onScheduleAtChange(value: string): void
   onArchive(ids: string[]): void; onSchedule(ids: string[]): void; onClearSchedule(ids: string[]): void; onFormat(ids: string[], contentType: ContentType): void
@@ -52,6 +58,16 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
   const [context, setContext] = useState<{ post: Post; x: number; y: number } | null>(null)
   const [showStatuses, setShowStatuses] = useState(false)
   const [showColors, setShowColors] = useState(false)
+  const [copyPosts, setCopyPosts] = useState<Post[]>([])
+  const [pastePreview, setPastePreview] = useState(0)
+  const [pasteSource, setPasteSource] = useState<ClipboardPasteSource>('freeform')
+  const [pasteMatch, setPasteMatch] = useState(0)
+  const [showPasteHint, setShowPasteHint] = useState(false)
+  const [applyPreview, setApplyPreview] = useState<ParsedPost | null>(null)
+  const [applyText, setApplyText] = useState('')
+  const [applyTargets, setApplyTargets] = useState<Post[]>([])
+  const [justPastedIds, setJustPastedIds] = useState<Set<string>>(() => new Set())
+  const pastedFeedbackTimer = useRef<number | null>(null)
   const [openCells, setOpenCells] = useState<Set<string>>(new Set())
   const [duplicatedPostId, setDuplicatedPostId] = useState<string | null>(null)
   const duplicateFeedbackTimer = useRef<number | null>(null)
@@ -86,7 +102,49 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
 
   useEffect(() => () => {
     if (duplicateFeedbackTimer.current !== null) window.clearTimeout(duplicateFeedbackTimer.current)
+    if (pastedFeedbackTimer.current !== null) window.clearTimeout(pastedFeedbackTimer.current)
   }, [])
+
+  // Al abrir el menú contextual miramos qué hay en el portapapeles para
+  // habilitar "Pegar como publicaciones" (cantidad exacta), "Aplicar
+  // contenido copiado" (una publicación con campos o diapositivas) y saber
+  // cuántos bloques matchean publicaciones existentes por id: con
+  // coincidencias, pegar abre el diálogo con destino por bloque.
+  useEffect(() => {
+    if (!context) return
+    let cancelled = false
+    setPastePreview(0)
+    setPasteSource('freeform')
+    setPasteMatch(0)
+    setApplyPreview(null)
+    setApplyText('')
+    void runWithErrorReporting(async () => {
+      const payload = readClipboardPayload(await window.planner.clipboard.readHtml())
+      const text = await window.planner.clipboard.readText()
+      const parsed = payload ? groupPayloadPosts(payload.items) : parsePostsFromText(text)
+      if (cancelled) return
+      setPastePreview(parsed.length)
+      setPasteSource(payload ? 'manifest' : isStructuredPostText(text) ? 'structured' : 'freeform')
+      setApplyText(text.trim())
+      setPasteMatch(parsed.reduce((total, post) => total + (post.id && allPosts.some(candidate => candidate.id === post.id) ? 1 : 0), 0))
+      // "Aplicar" también procede cuando el portapapeles solo trae
+      // diapositivas: se anexan al final (aditivo); los campos se
+      // reemplazan con confirmación propia en el diálogo.
+      setApplyPreview(parsed.length === 1 && (availableParsedFields(parsed[0]).length || parsed[0].slides.length) ? parsed[0] : null)
+    }, 'No se pudo leer el portapapeles')
+    return () => { cancelled = true }
+  }, [context, allPosts])
+
+  const pastePosts = async (target: Post) => {
+    const created = await onPastePosts(target)
+    if (!created?.length) return
+    setJustPastedIds(new Set(created.map(post => post.id)))
+    // Si el texto no venía con el formato de la app, la acción se hizo igual
+    // (pegar nunca destruye), pero avisamos por si esperaba otra cosa.
+    if (pasteSource === 'freeform') setShowPasteHint(true)
+    if (pastedFeedbackTimer.current !== null) window.clearTimeout(pastedFeedbackTimer.current)
+    pastedFeedbackTimer.current = window.setTimeout(() => setJustPastedIds(new Set()), 2500)
+  }
 
   const duplicatePost = async (post: Post) => {
     const duplicate = await onDuplicate(post)
@@ -172,7 +230,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
               const otherMemberships = activeGroups.filter(group => group.id !== lane.group?.id && group.postIds.includes(post.id)).map(group => group.name)
               const overdue = (post.status === 'idea' || post.status === 'draft') && post.scheduledAt && parseISO(post.scheduledAt).getTime() < Date.now()
               const ContentIcon = post.contentType === 'reel' ? Film : post.contentType === 'carousel' ? Images : FileText
-              const cardClass = `board-card${selected.has(post.id) ? ' selected' : ''}${pickedPostIds.has(post.id) ? ' session-picked' : ''}${post.color !== postColors[0].value ? ' has-custom-color' : ''}${dragging.has(post.id) ? ' is-dragging' : ''}${duplicatedPostId === post.id ? ' just-duplicated' : ''}`
+              const cardClass = `board-card${selected.has(post.id) ? ' selected' : ''}${pickedPostIds.has(post.id) ? ' session-picked' : ''}${post.color !== postColors[0].value ? ' has-custom-color' : ''}${dragging.has(post.id) ? ' is-dragging' : ''}${duplicatedPostId === post.id || justPastedIds.has(post.id) ? ' just-duplicated' : ''}`
               return <div className="board-card-slot" key={post.id}>
                 <article
                   data-area-select-id={post.id}
@@ -232,7 +290,10 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
       <button type="button" role="menuitem" onClick={() => { void duplicatePost(context.post); close() }}><Copy size={14} />Duplicar publicación</button>
       <button type="button" role="menuitem" onClick={() => { void runWithErrorReporting(() => window.planner.media.openFolder(context.post.id, context.post.project), 'No se pudo abrir la carpeta de media'); close() }}><FolderOpen size={14} />Abrir en el Explorador Windows</button>
       <button type="button" role="menuitem" onClick={() => { onDelete(context.post); close() }}><Trash2 size={14} />Eliminar publicación</button>
-      <button type="button" role="menuitem" disabled={!context.post.caption.trim()} onClick={() => { void runWithErrorReporting(() => window.planner.clipboard.write(context.post.caption), 'No se pudo copiar el texto'); close() }}><ClipboardCopy size={14} />Copiar texto</button>
+      <button type="button" role="menuitem" disabled={!context.post.caption.trim()} onClick={() => { const request = withClipboardPayload(context.post.caption, [{ kind: 'field', field: 'caption', text: context.post.caption, sourceId: context.post.id }]); void runWithErrorReporting(() => window.planner.clipboard.write(request.text, request.html), 'No se pudo copiar el texto'); close() }}><ClipboardCopy size={14} />Copiar texto</button>
+      <button type="button" role="menuitem" onClick={() => { setCopyPosts(actionIds.map(id => postById.get(id)).filter(post => post !== undefined)); close() }}><ClipboardCopy size={14} />{actionIds.length > 1 ? `Copiar ${actionIds.length} publicaciones…` : 'Copiar publicación…'}</button>
+      <button type="button" role="menuitem" disabled={!pastePreview} title={pasteMatch > 0 ? 'Cada bloque vuelve a su publicación original; también podés pegarlas como nuevas' : undefined} onClick={() => { if (pasteMatch > 0) onOpenPasteDialog(context.post); else void pastePosts(context.post); close() }}><ClipboardPaste size={14} />{pastePreview ? `Pegar ${pastePreview} ${pastePreview === 1 ? 'publicación' : 'publicaciones'}${pasteMatch > 0 ? '…' : ''}` : 'Pegar publicación'}</button>
+      <button type="button" role="menuitem" disabled={!applyPreview} title="Reemplaza los campos y anexa diapositivas de lo copiado" onClick={() => { setApplyTargets(actionIds.map(id => postById.get(id)).filter((post): post is Post => post !== undefined)); close() }}><Replace size={14} />{actionIds.length > 1 ? `Aplicar contenido a ${actionIds.length} publicaciones…` : 'Aplicar contenido copiado…'}</button>
       <button type="button" role="menuitem" aria-expanded={showStatuses} onClick={() => setShowStatuses(value => !value)}><MoreHorizontal size={14} />Cambiar etapa…</button>
       {showStatuses && <div className="board-context-statuses" role="group" aria-label="Cambiar etapa">{stages.filter(status => status !== context.post.status && (status !== 'scheduled' || Boolean(context.post.scheduledAt))).map(status => <button type="button" key={status} onClick={() => { onStatus(context.post, status); close(); setShowStatuses(false) }}>{statusMeta[status].label}</button>)}</div>}
       <button type="button" role="menuitem" aria-expanded={showColors} onClick={() => setShowColors(value => !value)}><span className="board-context-color-icon" style={{ backgroundColor: context.post.color }} />Cambiar color…</button>
@@ -241,5 +302,9 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
         <button type="button" className="board-context-color-reset" aria-pressed={context.post.color === postColors[0].value} onClick={() => { onColor(context.post, postColors[0].value); close() }}>Predeterminado</button>
       </div>}
     </BoardContextMenu>
-  })()}</>
+  })()}
+  {copyPosts.length > 0 && <PostCopyDialog posts={copyPosts.map(post => ({ title: post.title, caption: post.caption, notes: post.notes, hashtags: post.hashtags, ideaBlocks: post.ideaBlocks, sourceId: post.id }))} onClose={() => setCopyPosts([])} />}
+  {applyTargets.length > 0 && applyPreview && <ApplyFieldsDialog targets={applyTargets.map(post => ({ title: post.title, caption: post.caption, notes: post.notes, hashtags: post.hashtags }))} incoming={applyPreview} text={applyText} onApply={(fields, includeSlides) => onApplyFields(applyTargets, fields, includeSlides)} onClose={() => setApplyTargets([])} />}
+  {showPasteHint && <PasteFormatHint onClose={() => setShowPasteHint(false)} />}
+</>
 }

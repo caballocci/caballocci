@@ -32,7 +32,8 @@
   gap: 6px;
 }
 
-.idea-selection-toggle {
+.idea-selection-toggle,
+.idea-paste-toggle {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -46,7 +47,8 @@
 }
 
 .idea-selection-toggle:hover:not(:disabled),
-.idea-selection-toggle.active {
+.idea-selection-toggle.active,
+.idea-paste-toggle:hover {
   border-color: #3b4940;
   background: #1d2520;
   color: #c7d5ca;
@@ -55,6 +57,16 @@
 .idea-selection-toggle:disabled {
   opacity: .45;
   cursor: default;
+}
+
+.idea-label-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #89958d;
+  font-size: 9px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .idea-selection-toolbar {
@@ -107,6 +119,15 @@
 }
 
 .idea-selection-feedback {
+  color: #9ec9a9;
+  font-size: 9px;
+}
+
+.idea-paste-feedback {
+  margin: 4px 0 0;
+  padding: 4px 8px;
+  border: 1px solid #303b33;
+  background: #151b17;
   color: #9ec9a9;
   font-size: 9px;
 }
