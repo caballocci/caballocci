@@ -121,13 +121,14 @@ function AppContent() {
       const target = event.target instanceof HTMLElement ? event.target : null
       if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
       const redoing = key === 'y' || (key === 'z' && event.shiftKey)
-      if (redoing ? !redoHistory.length : !undoHistory.length) return
+      const history = redoing ? redoHistory : undoHistory
+      if (history.at(-1)?.view !== view) return
       event.preventDefault()
       void (redoing ? redoSavedChange() : undoSavedChange()).catch(error => reportAppError(error, 'No se pudo deshacer el cambio guardado'))
     }
     window.addEventListener('keydown', onShortcut)
     return () => window.removeEventListener('keydown', onShortcut)
-  }, [redoHistory.length, redoSavedChange, undoHistory.length, undoSavedChange])
+  }, [redoHistory, redoSavedChange, undoHistory, undoSavedChange, view])
   useEffect(() => {
     if (!undoNotice) return
     const timeout = window.setTimeout(clearUndoNotice, 2100)

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Idea, IdeaAnalysisOptions, IdeaAnalysisProgress, IdeaCluster, IdeaInput, IdeaNeighbor, Post, PostInput, PostStatus, WorkGroup, WorkGroupInput } from '../shared/types'
+import type { ConceptMapLink, ConceptMapNode, Idea, IdeaAnalysisOptions, IdeaAnalysisProgress, IdeaCluster, IdeaInput, IdeaNeighbor, Post, PostInput, PostStatus, WorkGroup, WorkGroupInput } from '../shared/types'
 
 export type PlannerView = 'timeline' | 'calendar' | 'board' | 'concept-map' | 'ideas' | 'library' | 'sources' | 'about'
 
@@ -9,11 +9,14 @@ export interface QuickWrite {
   text: string
 }
 
+type ConceptMapState = { nodes: ConceptMapNode[]; links: ConceptMapLink[] }
+type ConceptMapSnapshot = ConceptMapState & { nodeIds: string[]; linkIds: string[] }
 type WorkspaceUndoLeaf =
-  | { kind: 'post'; id: string; before: Post | null; after: Post | null; label: string }
-  | { kind: 'idea'; id: string; before: Idea | null; after: Idea | null; label: string }
-  | { kind: 'group'; id: string; before: WorkGroup | null; after: WorkGroup | null; label: string }
-type WorkspaceUndoAction = WorkspaceUndoLeaf | { kind: 'batch'; actions: WorkspaceUndoLeaf[]; label: string }
+  | { kind: 'post'; id: string; before: Post | null; after: Post | null; label: string; view: PlannerView }
+  | { kind: 'idea'; id: string; before: Idea | null; after: Idea | null; label: string; view: PlannerView }
+  | { kind: 'group'; id: string; before: WorkGroup | null; after: WorkGroup | null; label: string; view: PlannerView }
+  | { kind: 'concept-map'; before: ConceptMapSnapshot; after: ConceptMapSnapshot; label: string; view: 'concept-map' }
+type WorkspaceUndoAction = WorkspaceUndoLeaf | { kind: 'batch'; actions: WorkspaceUndoLeaf[]; label: string; view: PlannerView }
 
 export function postMatchesQuery(post: Post, query: string) {
   const normalized = query.trim().toLocaleLowerCase()
@@ -44,6 +47,7 @@ interface PlannerState {
   view: PlannerView
   selectedId: string | null
   selectedIdeaId: string | null
+  pendingConceptMapPostId: string | null
   query: string
   activeSpace: string | null
   customSpaces: string[]
@@ -67,6 +71,7 @@ interface PlannerState {
   redoSavedChange(): Promise<void>
   groupRecentUndoActions(count: number, label: string): void
   clearUndoNotice(): void
+  recordConceptMapChange(before: { nodes: ConceptMapNode[]; links: ConceptMapLink[] }, after: { nodes: ConceptMapNode[]; links: ConceptMapLink[] }, label: string): void
   ideaNeighbors(id: string, limit?: number, ignoredTerms?: string[], options?: IdeaAnalysisOptions): Promise<IdeaNeighbor[]>
   refreshEmbeddings(ids?: string[], ignoredTerms?: string[], options?: IdeaAnalysisOptions): Promise<{ updated: number; model: string; modelVersion: string }>
   proposeClusters(threshold?: number, ignoredTerms?: string[], options?: IdeaAnalysisOptions, ideaIds?: string[], onProgress?: (progress: IdeaAnalysisProgress) => void): Promise<IdeaCluster[]>
@@ -75,6 +80,8 @@ interface PlannerState {
   setView(view: PlannerView): void
   select(id: string | null): void
   selectIdea(id: string | null): void
+  requestConceptMapPost(id: string): void
+  clearConceptMapPostRequest(): void
   setQuery(query: string): void
   setActiveSpace(space: string | null): void
   setActiveWorkGroup(id: string | null): void
@@ -144,8 +151,21 @@ function pushUndo(history: WorkspaceUndoAction[], action: WorkspaceUndoAction) {
   return [...history.slice(-99), action]
 }
 
+async function applyConceptMapSnapshot(snapshot: ConceptMapSnapshot) {
+  const current = await window.planner.conceptMap.list()
+  const nodeIds = new Set(snapshot.nodeIds)
+  const linkIds = new Set(snapshot.linkIds)
+  const targetNodes = new Map(snapshot.nodes.map(node => [node.id, node]))
+  const targetLinks = new Map(snapshot.links.map(link => [link.id, link]))
+  for (const node of snapshot.nodes) await window.planner.conceptMap.saveNode({ id: node.id, folderId: node.folderId, kind: node.kind, sourceId: node.sourceId, title: node.title, body: node.body, x: node.x, y: node.y })
+  for (const link of current.links) if (linkIds.has(link.id) && !targetLinks.has(link.id)) await window.planner.conceptMap.removeLink(link.id)
+  for (const node of current.nodes) if (nodeIds.has(node.id) && !targetNodes.has(node.id)) await window.planner.conceptMap.removeNode(node.id)
+  for (const link of snapshot.links) await window.planner.conceptMap.saveLink({ id: link.id, fromNodeId: link.fromNodeId, toNodeId: link.toNodeId, relation: link.relation })
+}
+
 function actionReferencesPost(action: WorkspaceUndoAction, id: string): boolean {
   if (action.kind === 'batch') return action.actions.some(item => actionReferencesPost(item, id))
+  if (action.kind === 'concept-map') return [...action.before.nodes, ...action.after.nodes].some(node => node.kind === 'post' && node.sourceId === id)
   if (action.kind === 'post') return action.id === id
   if (action.kind === 'idea') return false
   return Boolean(action.before?.postIds.includes(id) || action.after?.postIds.includes(id))
@@ -153,6 +173,7 @@ function actionReferencesPost(action: WorkspaceUndoAction, id: string): boolean 
 
 function actionReferencesIdea(action: WorkspaceUndoAction, id: string): boolean {
   if (action.kind === 'batch') return action.actions.some(item => actionReferencesIdea(item, id))
+  if (action.kind === 'concept-map') return [...action.before.nodes, ...action.after.nodes].some(node => node.kind === 'idea' && node.sourceId === id)
   if (action.kind === 'idea') return action.id === id
   return action.kind === 'post' && (action.before?.sourceIdeaId === id || action.after?.sourceIdeaId === id)
 }
@@ -170,6 +191,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   view: 'timeline',
   selectedId: null,
   selectedIdeaId: null,
+  pendingConceptMapPostId: null,
   query: '',
   activeSpace: null,
   customSpaces: readStoredSpaces(),
@@ -200,6 +222,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     }
   },
   save: async (post, options) => {
+    const sourceView = get().view
     const before = get().posts.find(item => item.id === post.id) || null
     const historyStart = get().undoHistory.length
     const saved = await window.planner.posts.save(post)
@@ -207,7 +230,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       const changed = JSON.stringify(before) !== JSON.stringify(saved)
       return {
         posts: state.posts.some(item => item.id === saved.id) ? state.posts.map(item => item.id === saved.id ? saved : item) : [...state.posts, saved],
-        undoHistory: options?.recordHistory === false || !changed ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'post', id: saved.id, before, after: saved, label: before ? postChangeLabel(before, saved) : 'Crear publicación' }),
+        undoHistory: options?.recordHistory === false || !changed ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'post', id: saved.id, before, after: saved, label: before ? postChangeLabel(before, saved) : 'Crear publicación', view: sourceView }),
         redoHistory: options?.recordHistory === false || !changed ? state.redoHistory : [],
         undoNotice: null,
       }
@@ -236,13 +259,14 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     return moved
   },
   saveWorkGroup: async (group, options) => {
+    const sourceView = get().view
     const before = get().workGroups.find(item => item.id === group.id) || null
     const saved = await window.planner.workGroups.save(group)
     set(state => {
       const top = state.undoHistory.at(-1)
       const history = options?.recordHistory === false && top?.kind === 'group' && top.id === saved.id
         ? [...state.undoHistory.slice(0, -1), { ...top, after: saved }]
-        : options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: before ? 'Editar colección' : 'Crear colección' })
+        : options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: before ? 'Editar colección' : 'Crear colección', view: sourceView })
       return {
       workGroups: [...state.workGroups.filter(item => item.id !== saved.id), saved],
       undoHistory: history,
@@ -253,13 +277,14 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     return saved
   },
   setWorkGroupPosts: async (id, postIds, options) => {
+    const sourceView = get().view
     const before = get().workGroups.find(item => item.id === id) || null
     const saved = await window.planner.workGroups.setPosts(id, postIds)
     set(state => {
       const top = state.undoHistory.at(-1)
       const history = options?.recordHistory === false && top?.kind === 'group' && top.id === saved.id
         ? [...state.undoHistory.slice(0, -1), { ...top, after: saved }]
-        : options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: 'Cambiar publicaciones de la colección' })
+        : options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: 'Cambiar publicaciones de la colección', view: sourceView })
       return {
       workGroups: [...state.workGroups.filter(item => item.id !== saved.id), saved],
       undoHistory: history,
@@ -270,22 +295,24 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     return saved
   },
   setWorkGroupArchived: async (id, archived, options) => {
+    const sourceView = get().view
     const before = get().workGroups.find(item => item.id === id) || null
     const saved = await window.planner.workGroups.setArchived(id, archived)
     set(state => ({
       workGroups: [...state.workGroups.filter(item => item.id !== saved.id), saved], activeWorkGroupId: archived && state.activeWorkGroupId === id ? null : state.activeWorkGroupId,
-      undoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: archived ? 'Archivar colección' : 'Restaurar colección' }),
+      undoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: archived ? 'Archivar colección' : 'Restaurar colección', view: sourceView }),
       redoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.redoHistory : [],
       undoNotice: null,
     }))
     return saved
   },
   removeWorkGroup: async (id, options) => {
+    const sourceView = get().view
     const before = get().workGroups.find(item => item.id === id) || null
     await window.planner.workGroups.remove(id)
     set(state => ({
       workGroups: state.workGroups.filter(group => group.id !== id), activeWorkGroupId: state.activeWorkGroupId === id ? null : state.activeWorkGroupId,
-      undoHistory: options?.recordHistory === false || !before ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id, before, after: null, label: 'Eliminar colección' }),
+      undoHistory: options?.recordHistory === false || !before ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id, before, after: null, label: 'Eliminar colección', view: sourceView }),
       redoHistory: options?.recordHistory === false || !before ? state.redoHistory : [],
       undoNotice: null,
     }))
@@ -316,23 +343,25 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     if (post) await get().save({ ...post, status })
   },
   saveIdea: async (idea, options) => {
+    const sourceView = get().view
     const before = get().ideas.find(item => item.id === idea.id) || null
     const saved = await window.planner.ideas.save(idea)
     set(state => ({
       ideas: [...state.ideas.filter(item => item.id !== saved.id), saved],
-      undoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'idea', id: saved.id, before, after: saved, label: before ? ideaChangeLabel(before, saved) : 'Crear idea' }),
+      undoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'idea', id: saved.id, before, after: saved, label: before ? ideaChangeLabel(before, saved) : 'Crear idea', view: sourceView }),
       redoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.redoHistory : [],
       undoNotice: null,
     }))
     return saved
   },
   saveIdeasMany: async (ideas) => {
+    const sourceView = get().view
     const result = await window.planner.ideas.saveMany(ideas)
     set(state => {
-      const actions: WorkspaceUndoLeaf[] = result.created.map(idea => ({ kind: 'idea', id: idea.id, before: null, after: idea, label: 'Importar ideas' }))
+      const actions: WorkspaceUndoLeaf[] = result.created.map(idea => ({ kind: 'idea', id: idea.id, before: null, after: idea, label: 'Importar ideas', view: sourceView }))
       const importAction: WorkspaceUndoAction | null = !actions.length ? null : actions.length === 1
         ? { ...actions[0], label: 'Importar idea' }
-        : { kind: 'batch', actions, label: `Importar ${actions.length} ideas` }
+        : { kind: 'batch', actions, label: `Importar ${actions.length} ideas`, view: sourceView }
       return {
         ideas: [...state.ideas, ...result.created],
         undoHistory: importAction ? pushUndo(state.undoHistory, importAction) : state.undoHistory,
@@ -397,6 +426,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       } else if (item.kind === 'idea') {
         if (item.before) await get().saveIdea(item.before, { recordHistory: false })
         else await get().removeIdea(item.id, { recordHistory: false })
+      } else if (item.kind === 'concept-map') {
+        await applyConceptMapSnapshot(item.before)
       } else {
         if (item.before) {
           await get().saveWorkGroup(item.before, { recordHistory: false })
@@ -418,6 +449,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       } else if (item.kind === 'idea') {
         if (item.after) await get().saveIdea(item.after, { recordHistory: false })
         else await get().removeIdea(item.id, { recordHistory: false })
+      } else if (item.kind === 'concept-map') {
+        await applyConceptMapSnapshot(item.after)
       } else {
         if (item.after) {
           await get().saveWorkGroup(item.after, { recordHistory: false })
@@ -435,11 +468,35 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       if (!recent.length) return state
       const start = state.undoHistory.length - recent.length
       const actions = recent.flatMap(action => action.kind === 'batch' ? action.actions : [action])
-      const grouped: WorkspaceUndoAction = actions.length === 1 ? { ...actions[0], label } : { kind: 'batch', actions, label }
+      const grouped: WorkspaceUndoAction = actions.length === 1 ? { ...actions[0], label } : { kind: 'batch', actions, label, view: actions[0].view }
       return { undoHistory: [...state.undoHistory.slice(0, start), grouped] }
     })
   },
   clearUndoNotice: () => set({ undoNotice: null }),
+  recordConceptMapChange: (before, after, label) => set(state => {
+    const changedIds = <T extends { id: string }>(left: T[], right: T[]) => {
+      const leftById = new Map(left.map(item => [item.id, item]))
+      const rightById = new Map(right.map(item => [item.id, item]))
+      const signature = (item: T | undefined) => {
+        if (!item) return undefined
+        const meaningfulFields = { ...item } as T & { updatedAt?: string }
+        delete meaningfulFields.updatedAt
+        return JSON.stringify(meaningfulFields)
+      }
+      return [...new Set([...leftById.keys(), ...rightById.keys()])].filter(id => signature(leftById.get(id)) !== signature(rightById.get(id)))
+    }
+    const nodeIds = changedIds(before.nodes, after.nodes)
+    const linkIds = changedIds(before.links, after.links)
+    if (!nodeIds.length && !linkIds.length) return state
+    const changedNodes = new Set(nodeIds); const changedLinks = new Set(linkIds)
+    const beforeSnapshot: ConceptMapSnapshot = { nodeIds, linkIds, nodes: before.nodes.filter(node => changedNodes.has(node.id)), links: before.links.filter(link => changedLinks.has(link.id)) }
+    const afterSnapshot: ConceptMapSnapshot = { nodeIds, linkIds, nodes: after.nodes.filter(node => changedNodes.has(node.id)), links: after.links.filter(link => changedLinks.has(link.id)) }
+    return {
+      undoHistory: pushUndo(state.undoHistory, { kind: 'concept-map', before: beforeSnapshot, after: afterSnapshot, label, view: 'concept-map' }),
+      redoHistory: [],
+      undoNotice: null,
+    }
+  }),
   ideaNeighbors: (id, limit, ignoredTerms, options) => window.planner.ideas.neighbors(id, limit, ignoredTerms, options),
   refreshEmbeddings: (ids, ignoredTerms, options) => window.planner.ideas.refreshEmbeddings(ids, ignoredTerms, options),
   proposeClusters: async (threshold, ignoredTerms, options, ideaIds, onProgress) => window.planner.ideas.clusters(threshold, ignoredTerms, options, ideaIds, onProgress),
@@ -448,6 +505,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   setView: (view) => set({ view }),
   select: (selectedId) => set({ selectedId }),
   selectIdea: (selectedIdeaId) => set({ selectedIdeaId }),
+  requestConceptMapPost: (id) => set({ pendingConceptMapPostId: id, view: 'concept-map' }),
+  clearConceptMapPostRequest: () => set({ pendingConceptMapPostId: null }),
   setQuery: (query) => set({ query }),
   setActiveSpace: (activeSpace) => set({ activeSpace, activeWorkGroupId: null, selectedId: null, selectedIdeaId: null }),
   setActiveWorkGroup: (activeWorkGroupId) => {
