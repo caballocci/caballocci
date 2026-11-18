@@ -604,6 +604,7 @@ function mapWorkGroup(row: Record<string, unknown>) {
     description: row.description,
     color: row.color || '',
     space: row.space || '',
+    parentId: row.parent_id ? String(row.parent_id) : null,
     archivedAt: row.archived_at || null,
     postIds,
     compressedMediaCount,

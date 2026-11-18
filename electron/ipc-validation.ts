@@ -334,6 +334,9 @@ export function validateWorkGroupInput(value: unknown): Record<string, unknown> 
   }
   const id = optionalId(group.id, 'workGroup.id')
   if (id) validated.id = id
+  if (group.parentId !== undefined) {
+    validated.parentId = group.parentId == null || group.parentId === '' ? null : text(group.parentId, 'workGroup.parentId', 128, false).trim()
+  }
   return validated
 }
 

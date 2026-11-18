@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { Smartphone } from 'lucide-react'
 import type { MediaAsset, Post, WorkGroup } from '../../shared/types'
 import { EditorMediaPicker } from '../editor/EditorMediaPicker'
+import { childrenByParent } from '../../shared/work-group-tree'
 
 type BoardBulkActionsProps = {
   selected: Set<string>
@@ -32,7 +33,13 @@ export function BoardBulkActions({ selected, selectedPosts, onAttachMedia, workG
 
   return <div className="board-bulk-actions">
     <strong>{selected.size} seleccionadas</strong>
-    {workGroups.some(group => !group.archivedAt) && <><select aria-label="Colección de destino" value={membershipTargetGroupId} onChange={event => setMembershipTargetGroupId(event.target.value)}><option value="">Añadir a una colección…</option>{workGroups.filter(group => !group.archivedAt).map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><button type="button" disabled={!membershipTargetGroupId} onClick={() => void updateGroupMembership(membershipTargetGroupId, true)}>Añadir</button></>}
+    {workGroups.some(group => !group.archivedAt) && <><select aria-label="Colección de destino" value={membershipTargetGroupId} onChange={event => setMembershipTargetGroupId(event.target.value)}><option value="">Añadir a una colección…</option>{(() => {
+      const children = childrenByParent(workGroups.filter(group => !group.archivedAt))
+      const ordered: Array<{ group: WorkGroup; depth: number }> = []
+      const walk = (id: string | null, depth: number) => { for (const group of children.get(id) ?? []) { ordered.push({ group, depth }); walk(group.id, depth + 1) } }
+      walk(null, 0)
+      return ordered.map(({ group, depth }) => <option key={group.id} value={group.id}>{depth > 0 ? '↳ '.repeat(depth) : ''}{group.name}</option>)
+    })()}</select><button type="button" disabled={!membershipTargetGroupId} onClick={() => void updateGroupMembership(membershipTargetGroupId, true)}>Añadir</button></>}
     {selectedWorkGroup && !selectedWorkGroup.archivedAt && selectedWorkGroup.postIds.some(id => selected.has(id)) && <button type="button" onClick={() => void updateGroupMembership(selectedWorkGroup.id, false)}>Quitar de esta colección</button>}
     <button type="button" onClick={openGroupForm}>Crear colección</button>
     {spaces.length > 0 && <label className="bulk-space-control">Mover a proyecto<select aria-label="Mover selección a proyecto" defaultValue="" onChange={event => { const space = event.target.value; if (space) void moveToSpace(space); event.target.value = '' }}><option value="">Elegir…</option>{spaces.map(space => <option key={space} value={space}>{space}</option>)}</select></label>}

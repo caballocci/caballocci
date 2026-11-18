@@ -133,3 +133,19 @@
 .board-empty > span { flex: 1 1 auto; }
 .board-empty .settings-button { margin-left: 0; }
 .board-stack article { padding: 8px; border-radius: 6px; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+
+/* Nesting: breadcrumb por niveles + indicadores de orden/anidado al arrastrar colecciones */
+.board-collection-breadcrumb { flex-basis: 100%; display: flex; align-items: center; gap: 7px; padding-bottom: 2px; }
+.board-collection-breadcrumb > button { border: 0; border-radius: 4px; background: transparent; color: #93a097; font-size: 10px; font-weight: 700; padding: 3px 7px; cursor: pointer; }
+.board-collection-breadcrumb > button:hover { background: #1b231e; color: #e8eee9; }
+.board-collection-breadcrumb span { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.board-collection-breadcrumb span em { color: #4d5850; font-style: normal; font-size: 11px; }
+.board-collection-breadcrumb span button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; border-radius: 4px; background: transparent; color: #93a097; font-size: 10px; font-weight: 700; padding: 3px 7px; cursor: pointer; }
+.board-collection-breadcrumb span button:hover { background: #1b231e; color: #e8eee9; }
+.board-collection-breadcrumb span button.active { color: #f0ca77; }
+.board-collection-back { display: grid; flex: none; width: 30px; height: 30px; place-items: center; padding: 0; border: 1px solid #303c34; border-radius: 6px; background: transparent; color: #aeb9b1; cursor: pointer; }
+.board-collection-back:hover { border-color: #d0a64b; color: #f1f5f2; }
+.board-collection-item.drop-before { box-shadow: inset 2px 0 0 #d0a64b; }
+.board-collection-item.drop-after { box-shadow: inset -2px 0 0 #d0a64b; }
+.board-collection-root-drop { flex: none; height: 32px; padding: 0 12px; border: 1px dashed #46534a; border-radius: 6px; background: transparent; color: #93a097; font-size: 10px; font-weight: 600; cursor: pointer; }
+.board-collection-root-drop:hover, .board-collection-root-drop.drag-over { border-color: #d0a64b; background: #282419; color: #f0ca77; }

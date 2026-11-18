@@ -401,4 +401,12 @@ export const migrations: Migration[] = [
     name: 'work_group_colors',
     up: `ALTER TABLE work_groups ADD COLUMN color TEXT NOT NULL DEFAULT '';`,
   },
+  {
+    version: 33,
+    name: 'work_groups_nested',
+    up: `
+      ALTER TABLE work_groups ADD COLUMN parent_id TEXT NULL;
+      CREATE INDEX IF NOT EXISTS work_groups_parent_idx ON work_groups(parent_id, archived_at);
+    `,
+  },
 ]

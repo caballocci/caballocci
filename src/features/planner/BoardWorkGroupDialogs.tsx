@@ -10,12 +10,14 @@ type BoardWorkGroupDialogsProps = {
   groupFormOpen: boolean
   setGroupFormOpen: Dispatch<SetStateAction<boolean>>
   editingGroupId: string | null
+  formParentName: string | null
   groupName: string
   setGroupName: Dispatch<SetStateAction<string>>
   groupDescription: string
   setGroupDescription: Dispatch<SetStateAction<string>>
   savingGroup: boolean
   submitGroupForm(event: FormEvent<HTMLFormElement>): void
+  pendingGroupChildCount: number
   pendingGroupAction: PendingGroupAction | null
   setPendingGroupAction: Dispatch<SetStateAction<PendingGroupAction | null>>
   groupDeleteMode: 'group' | 'all-posts' | 'selected-posts'
@@ -30,9 +32,9 @@ type BoardWorkGroupDialogsProps = {
 }
 
 export function BoardWorkGroupDialogs({
-  selectedCount, allPosts, groupFormOpen, setGroupFormOpen, editingGroupId,
+  selectedCount, allPosts, groupFormOpen, setGroupFormOpen, editingGroupId, formParentName,
   groupName, setGroupName, groupDescription, setGroupDescription, savingGroup,
-  submitGroupForm, pendingGroupAction, setPendingGroupAction, groupDeleteMode,
+  submitGroupForm, pendingGroupChildCount, pendingGroupAction, setPendingGroupAction, groupDeleteMode,
   setGroupDeleteMode, groupPostsToDelete, setGroupPostsToDelete, workingOnGroup,
   confirmGroupAction, pendingMediaCompression, setPendingMediaCompression,
   confirmMediaCompression,
@@ -41,8 +43,12 @@ export function BoardWorkGroupDialogs({
     {groupFormOpen && <div className="work-group-form-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !savingGroup) setGroupFormOpen(false) }}>
       <form className="work-group-form" role="dialog" aria-modal="true" aria-labelledby="work-group-form-title" onSubmit={submitGroupForm}>
         <header><span>COLECCIÓN DE TRABAJO</span><button type="button" aria-label="Cerrar" disabled={savingGroup} onClick={() => setGroupFormOpen(false)}>×</button></header>
-        <h2 id="work-group-form-title">{editingGroupId ? 'Editar colección' : 'Crear colección'}</h2>
-        <p>Reúne publicaciones de una campaña, serie o proyecto. Sus estados no se modifican.</p>
+        <h2 id="work-group-form-title">{editingGroupId ? 'Editar colección' : formParentName ? 'Nueva subcolección' : 'Crear colección'}</h2>
+        <p>{editingGroupId
+          ? formParentName ? <>Subcolección de <strong>{formParentName}</strong>. Sus estados no se modifican.</> : <>Reúne publicaciones de una campaña, serie o proyecto. Sus estados no se modifican.</>
+          : formParentName
+            ? <>Dentro de <strong>{formParentName}</strong>. La subcolección organiza sus publicaciones sin cambiar sus estados.</>
+            : <>Reúne publicaciones de una campaña, serie o proyecto. Sus estados no se modifican.</>}</p>
         <label htmlFor="work-group-name">Nombre</label>
         <input id="work-group-name" autoFocus maxLength={120} required value={groupName} onChange={event => setGroupName(event.target.value)} placeholder="Ej. Lanzamiento de primavera" />
         <label htmlFor="work-group-description">Descripción <span>Opcional</span></label>
@@ -58,10 +64,10 @@ export function BoardWorkGroupDialogs({
         <header><span>CONFIRMAR ACCIÓN</span><button type="button" aria-label="Cerrar" disabled={workingOnGroup} onClick={() => setPendingGroupAction(null)}>×</button></header>
         <h2 id="work-group-confirm-title">{pendingGroupAction.type === 'delete' ? '¿Borrar esta colección?' : pendingGroupAction.type === 'archive' ? '¿Archivar esta colección?' : '¿Restaurar esta colección?'}</h2>
         <p id="work-group-confirm-description">{pendingGroupAction.type === 'delete'
-          ? <>Se borrará <strong>{pendingGroupAction.group.name}</strong> y sus vínculos. Elige qué hacer con sus {pendingGroupAction.group.postIds.length} publicaciones:</>
+          ? <>Se borrará <strong>{pendingGroupAction.group.name}</strong> y sus vínculos.{pendingGroupChildCount > 0 && <> Sus {pendingGroupChildCount} subcolecciones subirán un nivel.</>} Elige qué hacer con sus {pendingGroupAction.group.postIds.length} publicaciones:</>
           : pendingGroupAction.type === 'archive'
-            ? <>Se archivará <strong>{pendingGroupAction.group.name}</strong>. Sus publicaciones y estados permanecerán intactos; podrás restaurarla después.</>
-            : <>Se restaurará <strong>{pendingGroupAction.group.name}</strong> y volverá a aparecer entre las colecciones activas.</>}</p>
+            ? <>Se archivará <strong>{pendingGroupAction.group.name}</strong>{pendingGroupChildCount > 0 ? ' y sus subcolecciones' : ''}. Sus publicaciones y estados permanecerán intactos; podrás restaurarla después.</>
+            : <>Se restaurará <strong>{pendingGroupAction.group.name}</strong>{pendingGroupChildCount > 0 ? ' y sus subcolecciones' : ''} y volverá a aparecer entre las colecciones activas.</>}</p>
         {pendingGroupAction.type === 'delete' && <div className="work-group-delete-options" role="radiogroup" aria-label="Qué borrar">
           <label><input type="radio" name="group-delete-mode" checked={groupDeleteMode === 'group'} onChange={() => setGroupDeleteMode('group')} /><span><strong>Borrar solo la colección</strong><small>Conserva publicaciones y archivos.</small></span></label>
           <label><input type="radio" name="group-delete-mode" checked={groupDeleteMode === 'all-posts'} onChange={() => setGroupDeleteMode('all-posts')} /><span><strong>Borrar colección y todas las publicaciones ({pendingGroupAction.group.postIds.length})</strong><small>Se quitarán también de otras colecciones.</small></span></label>

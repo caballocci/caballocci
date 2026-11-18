@@ -39,6 +39,8 @@ export interface WorkGroup {
   color: string
   /** Espacio propietario; cadena vacía indica una colección general. */
   space: string
+  /** Colección padre; null indica una colección de nivel superior. */
+  parentId: string | null
   archivedAt: string | null
   postIds: string[]
   compressedMediaCount: number
@@ -46,7 +48,7 @@ export interface WorkGroup {
   updatedAt: string
 }
 
-export type WorkGroupInput = Pick<WorkGroup, 'name' | 'description' | 'space'> & { id?: string; color?: string }
+export type WorkGroupInput = Pick<WorkGroup, 'name' | 'description' | 'space'> & { id?: string; color?: string; parentId?: string | null }
 
 export interface MediaAsset {
   id: string

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ConceptMapLink, ConceptMapNode, Idea, IdeaAnalysisOptions, IdeaAnalysisProgress, IdeaCluster, IdeaInput, IdeaNeighbor, Post, PostInput, PostStatus, WorkGroup, WorkGroupInput } from '../shared/types'
+import { subtreeGroupIds } from '../shared/work-group-tree'
 
 export type PlannerView = 'timeline' | 'calendar' | 'board' | 'concept-map' | 'ideas' | 'library' | 'sources' | 'about'
 
@@ -298,8 +299,11 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const sourceView = get().view
     const before = get().workGroups.find(item => item.id === id) || null
     const saved = await window.planner.workGroups.setArchived(id, archived)
+    // The backend archives/restores the whole subtree; mirror that in state and clear a selection that just became archived.
+    const subtree = subtreeGroupIds(get().workGroups, id)
+    const archivedAt = archived ? saved.archivedAt : null
     set(state => ({
-      workGroups: [...state.workGroups.filter(item => item.id !== saved.id), saved], activeWorkGroupId: archived && state.activeWorkGroupId === id ? null : state.activeWorkGroupId,
+      workGroups: state.workGroups.map(group => subtree.has(group.id) ? { ...group, archivedAt } : group), activeWorkGroupId: archived && state.activeWorkGroupId && subtree.has(state.activeWorkGroupId) ? null : state.activeWorkGroupId,
       undoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: archived ? 'Archivar colección' : 'Restaurar colección', view: sourceView }),
       redoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.redoHistory : [],
       undoNotice: null,
@@ -310,8 +314,10 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const sourceView = get().view
     const before = get().workGroups.find(item => item.id === id) || null
     await window.planner.workGroups.remove(id)
+    // The backend moves subcollections up one level; keep state consistent.
+    const parentId = before?.parentId ?? null
     set(state => ({
-      workGroups: state.workGroups.filter(group => group.id !== id), activeWorkGroupId: state.activeWorkGroupId === id ? null : state.activeWorkGroupId,
+      workGroups: state.workGroups.filter(group => group.id !== id).map(group => group.parentId === id ? { ...group, parentId } : group), activeWorkGroupId: state.activeWorkGroupId === id ? null : state.activeWorkGroupId,
       undoHistory: options?.recordHistory === false || !before ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id, before, after: null, label: 'Eliminar colección', view: sourceView }),
       redoHistory: options?.recordHistory === false || !before ? state.redoHistory : [],
       undoNotice: null,
