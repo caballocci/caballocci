@@ -103,12 +103,12 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
         <Inbox size={14} /><span className="board-collection-tab-name">Sin colección</span><em>{unassignedCount}</em>
       </button>}
       {!selectedWorkGroup && activeGroups.length > 0 && <span className="board-collection-divider" aria-hidden="true" />}
-      {selectedWorkGroup && <button type="button" className="board-collection-back" aria-label="Volver al nivel anterior" title="Volver al nivel anterior" onClick={() => setActiveWorkGroup(path.at(-2)?.id ?? null)}><ArrowLeft size={15} /></button>}
-      {levelGroups.length > 0 && <span className="board-collection-divider" aria-hidden="true" />}
+      {selectedWorkGroup && <button type="button" className="board-collection-back board-collection-chip" aria-label="Volver al nivel anterior" title="Volver al nivel anterior" onClick={() => setActiveWorkGroup(path.at(-2)?.id ?? null)}><ArrowLeft size={17} /></button>}
+      {selectedWorkGroup && <span className="board-collection-divider" aria-hidden="true" />}
       {levelGroups.map(group => {
         const count = countPostsIn(group)
         return <div className="board-collection-item" key={group.id} {...collectionDropProps(group)}>
-          <button type="button" draggable className={`board-collection-tab${group.color ? ' has-custom-color' : ''}`} aria-current={selectedWorkGroup?.id === group.id ? 'page' : undefined} onClick={() => setActiveWorkGroup(group.id)} onDragStart={event => { event.dataTransfer.setData(workGroupDragType, group.id); setDraggingCollectionId(group.id) }} onDragEnd={() => setDraggingCollectionId(null)} style={{ '--collection-color': group.color } as React.CSSProperties} title={`${group.name} · ${count} publicación(es) incluidas subcolecciones`}>
+          <button type="button" draggable className={`board-collection-tab board-collection-chip${group.color ? ' has-custom-color' : ''}`} aria-current={selectedWorkGroup?.id === group.id ? 'page' : undefined} onClick={() => setActiveWorkGroup(group.id)} onDragStart={event => { event.dataTransfer.setData(workGroupDragType, group.id); setDraggingCollectionId(group.id) }} onDragEnd={() => setDraggingCollectionId(null)} style={{ '--collection-color': group.color } as React.CSSProperties} title={`${group.name} · ${count} publicación(es) incluidas subcolecciones`}>
             <FolderOpen size={14} /><span className="board-collection-tab-name">{group.name}</span><em>{count}</em>
           </button>
           <button type="button" className="board-collection-item-menu" aria-label={`Opciones de ${group.name}`} onClick={event => {
@@ -118,7 +118,7 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
         </div>
       })}
       {draggingCollection?.parentId != null && <button type="button" className="board-collection-root-drop" onDragOver={event => { event.preventDefault(); event.currentTarget.classList.add('drag-over') }} onDragLeave={event => event.currentTarget.classList.remove('drag-over')} onDrop={event => { event.preventDefault(); event.currentTarget.classList.remove('drag-over'); const draggedId = event.dataTransfer.getData(workGroupDragType); if (draggedId) nestWorkGroup(draggedId, null); setDraggingCollectionId(null) }}>Mover al nivel superior</button>}
-      <button type="button" className="board-collection-add" onClick={() => openGroupForm(undefined, selectedWorkGroup)} aria-label={selectedWorkGroup ? 'Nueva subcolección' : 'Nueva colección'} title={selectedWorkGroup ? 'Nueva subcolección' : 'Nueva colección'}><Plus size={15} /></button>
+      <button type="button" className="board-collection-add board-collection-chip" onClick={() => openGroupForm(undefined, selectedWorkGroup)} aria-label={selectedWorkGroup ? 'Nueva subcolección' : 'Nueva colección'} title={selectedWorkGroup ? 'Nueva subcolección' : 'Nueva colección'}><Plus size={17} /></button>
       {draggingPosts && <span className="board-collection-drop-guidance" role="status">Soltá una publicación sobre una colección para añadirla</span>}
     </div>
     <div className="board-collection-aside">

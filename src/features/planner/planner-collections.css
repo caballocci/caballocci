@@ -1,10 +1,10 @@
 /* Navegación de colecciones: una sola barra, igual dentro y fuera de una colección */
-.board-collection-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: -6px 0 14px; padding-bottom: 8px; border-bottom: 1px solid #222b25; }
+.board-collection-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: -6px 0 14px; padding-bottom: 8px; border-bottom: 1px solid #222b25; --pill-border: transparent; --pill-radius: 6px; --pill-bg: transparent; --pill-color: #9aa69e; --pill-hover-bg: #1b231e; --pill-hover-color: #e8eee9; --pill-active-bg: #202722; --pill-accent: #d0a64b; --chip-height: 32px; }
 .board-collection-tabs { display: flex; flex: 1 1 320px; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .board-collection-tabs::-webkit-scrollbar { display: none; }
 .board-collection-item { position: relative; display: flex; flex: none; align-items: center; }
-.board-collection-tab { position: relative; display: inline-flex; flex: none; align-items: center; gap: 7px; max-width: 220px; height: 36px; padding: 0 12px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #9aa69e; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .14s ease, color .14s ease; }
-.board-collection-tab:hover { border-color: transparent; background: #1b231e; color: #e8eee9; }
+.board-collection-tab { position: relative; display: inline-flex; flex: none; align-items: center; gap: 7px; max-width: 220px; height: 36px; padding: 0 12px; border: 1px solid var(--pill-border); border-radius: var(--pill-radius); background: var(--pill-bg); color: var(--pill-color); font-size: 12px; font-weight: 600; cursor: pointer; transition: background .14s ease, color .14s ease, border-color .14s ease; }
+.board-collection-tab:hover { border-color: var(--pill-border); background: var(--pill-hover-bg); color: var(--pill-hover-color); }
 .board-collection-tab[aria-current="page"] { border-color: transparent; background: #202722; color: #f1f5f2; cursor: default; }
 .board-collection-tab[aria-current="page"]:hover { background: #252e28; color: #fff; }
 .board-collection-tab.has-custom-color { background: color-mix(in srgb, var(--collection-color) 13%, #171d19); }
@@ -28,8 +28,7 @@
 .board-collection-drop-guidance { flex: none; padding: 5px 8px; border: 1px solid #554929; border-radius: 5px; background: #211f19; color: #d2c2a1; font-size: 10px; }
 .board-collection-item.post-drag-over .board-collection-tab { border-color: #d0a64b; background: #282419; box-shadow: 0 0 0 2px #d0a64b38; color: #f1f5f2; }
 .board-collection-divider { flex: none; width: 1px; height: 18px; margin: 0 6px; background: #2d3730; }
-.board-collection-add { display: grid; flex: none; width: 36px; height: 36px; margin-left: 2px; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #7f8b83; cursor: pointer; transition: background .14s ease, color .14s ease; }
-.board-collection-add:hover { background: #1b231e; color: #d0a64b; }
+.board-collection-add { margin-left: 2px; width: 44px; padding: 0; }
 .board-collection-aside { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
 .board-collection-header-actions { display: flex; align-items: center; gap: 6px; }
 .board-collection-aside .settings-button, .board-collection-aside .work-group-toolbar .settings-button { min-height: 32px; height: 32px; font-size: 10px; }
@@ -143,9 +142,15 @@
 .board-collection-breadcrumb span button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; border-radius: 4px; background: transparent; color: #93a097; font-size: 10px; font-weight: 700; padding: 3px 7px; cursor: pointer; }
 .board-collection-breadcrumb span button:hover { background: #1b231e; color: #e8eee9; }
 .board-collection-breadcrumb span button.active { color: #f0ca77; }
-.board-collection-back { display: grid; flex: none; width: 30px; height: 30px; place-items: center; padding: 0; border: 1px solid #303c34; border-radius: 6px; background: transparent; color: #aeb9b1; cursor: pointer; }
-.board-collection-back:hover { border-color: #d0a64b; color: #f1f5f2; }
 .board-collection-item.drop-before { box-shadow: inset 2px 0 0 #d0a64b; }
 .board-collection-item.drop-after { box-shadow: inset -2px 0 0 #d0a64b; }
 .board-collection-root-drop { flex: none; height: 32px; padding: 0 12px; border: 1px dashed #46534a; border-radius: 6px; background: transparent; color: #93a097; font-size: 10px; font-weight: 600; cursor: pointer; }
 .board-collection-root-drop:hover, .board-collection-root-drop.drag-over { border-color: #d0a64b; background: #282419; color: #f0ca77; }
+
+/* Pill compartido de la barra (Estado A y fila de B/C): mismo look, alto achatado */
+.board-collection-chip { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: var(--chip-height); padding: 0 12px; border: 1px solid var(--pill-border); border-radius: var(--pill-radius); background: var(--pill-bg); color: var(--pill-color); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background .14s ease, color .14s ease, border-color .14s ease; }
+.board-collection-chip:hover { background: var(--pill-hover-bg); color: var(--pill-hover-color); }
+.board-collection-chip:active { background: var(--pill-active-bg); }
+.board-collection-chip:focus-visible, .board-collection-tab:focus-visible { outline: 2px solid var(--pill-accent); outline-offset: 2px; }
+.board-collection-tab.board-collection-chip { height: var(--chip-height); justify-content: flex-start; }
+.board-collection-back { width: 44px; padding: 0; }
