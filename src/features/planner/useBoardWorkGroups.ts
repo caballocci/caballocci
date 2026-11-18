@@ -66,7 +66,8 @@ export function useBoardWorkGroups({ allPosts, workGroups, activeSpace, selected
           parentId: editingGroupId ? existingGroup?.parentId ?? null : formParentId,
         })
         if (!editingGroupId && selected.size) await setWorkGroupPosts(group.id, [...selected], { recordHistory: false })
-        setActiveWorkGroup(group.id)
+        // Stay at the current level when creating a subcollection: entering it left the board showing only a back button and a "+", which looked like creation was broken.
+        if (!formParentId) setActiveWorkGroup(group.id)
         setMembershipTargetGroupId(group.id)
         setGroupFormOpen(false)
         setFormParentId(null)
