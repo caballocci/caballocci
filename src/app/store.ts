@@ -205,9 +205,16 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   spaceKeys: (() => { try { return JSON.parse(localStorage.getItem('caballocci.space-keys') || '{}') as Record<string, string> } catch { return {} } })(),
   spaceKey: (space) => get().spaceKeys[space] || space,
   load: async () => {
+    let watchdog: number | undefined
     try {
       if (!window.planner) throw new Error('La API de Electron no esta disponible. Inicia la aplicacion con npm.cmd run dev.')
-      const [posts, ideas, workGroups] = await Promise.all([window.planner.posts.list(), window.planner.ideas.list(), window.planner.workGroups.list()])
+      const timeout = new Promise<never>((_resolve, reject) => {
+        watchdog = window.setTimeout(() => reject(new Error('El workspace esta tardando demasiado en responder. Cierra los programas que esten saturando el disco y pulsa Reintentar.')), 120_000)
+      })
+      const [posts, ideas, workGroups] = await Promise.race([
+        Promise.all([window.planner.posts.list(), window.planner.ideas.list(), window.planner.workGroups.list()]),
+        timeout,
+      ])
       set(state => ({
         posts,
         ideas,
@@ -220,6 +227,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       }))
     } catch (error) {
       set({ loading: false, loadError: error instanceof Error ? error.message : 'No se pudo cargar el workspace local.' })
+    } finally {
+      window.clearTimeout(watchdog)
     }
   },
   save: async (post, options) => {

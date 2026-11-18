@@ -33,6 +33,25 @@ let activeIpcOperations = 0
 let ipcQuiescingForUpdate = false
 let ipcOperationsPaused = false
 const ipcIdleWaiters = new Set<() => void>()
+// Caches válidos dentro de una llamada IPC: se invalidan al entrar en cada canal para que
+// el mapeo de listas no re-consulte la base de datos por cada publicación/asset/colección.
+let allPostRowsCache: Record<string, unknown>[] | null = null
+let compressedIdsCache: Set<string> | null = null
+
+function resetIpcCaches() {
+  allPostRowsCache = null
+  compressedIdsCache = null
+}
+
+function getAllPostRows() {
+  if (!allPostRowsCache) allPostRowsCache = database.list()
+  return allPostRowsCache
+}
+
+function getCompressedIds() {
+  if (!compressedIdsCache) compressedIdsCache = new Set(database.compressedMediaIds())
+  return compressedIdsCache
+}
 
 function setSplashStatus(status: string) {
   splashStatus = status
@@ -496,6 +515,7 @@ function resumeIpcOperations() {
 
 function handle(channel: string, callback: (args: unknown[], event: IpcMainInvokeEvent) => unknown) {
   ipcMain.handle(channel, (event, ...args: unknown[]) => {
+    resetIpcCaches()
     assertTrustedIpcSender(event)
     const finishTracking = trackIpcOperation(channel)
     try {
@@ -546,7 +566,7 @@ function mapMediaAssets(value: unknown) {
       .filter(item => typeof item === 'object' && item !== null && !Array.isArray(item))
       .map(item => {
         const asset = item as Record<string, unknown>
-        const compressed = typeof asset.id === 'string' && Boolean(database?.getMediaCompressionState(asset.id))
+        const compressed = typeof asset.id === 'string' && getCompressedIds().has(String(asset.id))
         return { id: asset.id, sourceId: asset.sourceId, name: asset.name, kind: asset.kind, size: asset.size, mode: asset.mode, presentationRole: asset.presentationRole, sequence: asset.sequence, groupName: asset.groupName, compressed }
       })
   } catch {
@@ -588,9 +608,9 @@ function mapPost(row: Record<string, unknown>) {
 function mapWorkGroup(row: Record<string, unknown>) {
   const postIds = Array.isArray(row.post_ids) ? row.post_ids.map(String) : []
   const postIdSet = new Set(postIds)
-  const compressedIds = new Set(database.compressedMediaIds())
+  const compressedIds = getCompressedIds()
   const compressedMediaIds = new Set([
-    ...database.list()
+    ...getAllPostRows()
     .filter(post => postIdSet.has(String(post.id)))
     .flatMap(post => mapMediaAssets(post.media))
     .filter(asset => compressedIds.has(String(asset.id)))
@@ -648,10 +668,10 @@ function restoreTargetMedia(targetType: 'group' | 'post', targetId: string) {
     if (!database.getPost(targetId)) throw new Error('No se encontró la publicación.')
     postIds = new Set([targetId])
   }
-  const compressedIds = new Set(database.compressedMediaIds())
+  const compressedIds = getCompressedIds()
   const assetIds = [...new Set([
     ...database.compressedMediaIdsForTarget(targetType, targetId),
-    ...database.list()
+    ...getAllPostRows()
       .filter(post => postIds.has(String(post.id)))
       .flatMap(post => mapMediaAssets(post.media))
       .map(asset => String(asset.id))
@@ -751,6 +771,10 @@ app.setName('caballocci')
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 
 if (!hasSingleInstanceLock) {
+  dialog.showErrorBox(
+    'caballocci ya está abierto',
+    'Ya hay una instancia de caballocci en ejecución (o una instancia anterior bloqueada).\nBusca la ventana en la barra de tareas o cierra los procesos de caballocci en el Administrador de tareas y vuelve a intentarlo.',
+  )
   app.quit()
 } else {
   app.on('second-instance', () => {
@@ -760,7 +784,43 @@ if (!hasSingleInstanceLock) {
     mainWindow.focus()
   })
 
-app.whenReady().then(async () => {
+function ensureAllPostMediaFolders() {
+  try {
+    for (const row of database.list()) {
+      try {
+        ensurePostMediaFolder(String(row.project || ''), String(row.id))
+      } catch (error) {
+        console.error('No se pudo asegurar la carpeta de medios de una publicación:', error)
+      }
+    }
+  } catch (error) {
+    console.error('No se pudieron preparar las carpetas de medios:', error)
+  }
+}
+
+function reportStartupFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error('No se pudo iniciar caballocci:', error)
+  try {
+    if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
+  } catch { /* ignore */ }
+  splashWindow = null
+  try {
+    fs.appendFileSync(
+      path.join(app.getPath('userData'), 'startup-error.log'),
+      `[${new Date().toISOString()}] ${error instanceof Error ? error.stack || message : message}\n`,
+      'utf8',
+    )
+  } catch { /* ignore */ }
+  dialog.showErrorBox(
+    'No se pudo iniciar caballocci',
+    `${message}\n\nDetalle guardado en startup-error.log dentro de la carpeta de datos.\nCierra los programas que estén saturando el disco y vuelve a intentarlo.`,
+  )
+  app.exit(1)
+}
+
+function startCaballocci() {
+  return (async () => {
   splashShownAt = Date.now()
   splashWindow = createStartupSplashWindow()
   splashWindow.webContents.once('did-finish-load', () => {
@@ -789,7 +849,6 @@ app.whenReady().then(async () => {
   database = new PlannerDatabase(databasePath, wasmPath, backupsDirectory)
   await database.init()
   setSplashStatus('Preparando tus publicaciones')
-  database.list().forEach(row => ensurePostMediaFolder(String(row.project || ''), String(row.id)))
   registerMediaProtocol()
   updater = new UpdateManager(
     () => mainWindow,
@@ -1014,8 +1073,12 @@ app.whenReady().then(async () => {
   registerMediaIpcHandlers({ database, dataDirectory, getMainWindow: () => mainWindow, handle, withoutArguments, ensurePostMediaFolder, mapPost })
   setSplashStatus('Cargando el tablero')
   await createWindow()
+  ensureAllPostMediaFolders()
   updater.startAutomaticChecks()
-})
+  })()
+}
+
+app.whenReady().then(startCaballocci).catch(reportStartupFailure)
 }
 
 function ensurePostMediaFolder(project: string, postId: string) {

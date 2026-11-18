@@ -41,8 +41,15 @@ function AppContent() {
           const value = localStorage.getItem(key)
           if (value !== null) current[key] = value
         }
-        const merged = await window.planner.preferences.sync(current)
-        if (active) for (const [key, value] of Object.entries(merged)) localStorage.setItem(key, value)
+        const merged = await Promise.race([
+          window.planner.preferences.sync(current),
+          new Promise<Record<string, string> | null>(resolve => { window.setTimeout(() => resolve(null), 20_000) }),
+        ])
+        if (merged === null) {
+          reportAppError(new Error('La sincronización de preferencias superó el tiempo de espera. Se usarán los valores locales y el arranque continuará.'), 'Preferencias no sincronizadas')
+        } else if (active) {
+          for (const [key, value] of Object.entries(merged)) localStorage.setItem(key, value)
+        }
       } catch (error) {
         reportAppError(error, 'No se pudieron sincronizar las preferencias')
       }

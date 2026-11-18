@@ -141,7 +141,6 @@ export class PlannerDatabase {
   restoreMedia(assetIds: string[], managedRoot: string) { return this.mediaCompression.restore(assetIds, managedRoot) }
   compressedMediaIds() { return this.mediaCompression.compressedIds() }
   compressedMediaIdsForTarget(targetType: 'group' | 'post', targetId: string) { return this.mediaCompression.assetIdsForTarget(targetType, targetId) }
-  getMediaCompressionState(id: string) { return this.mediaCompression.state(id) }
 
   savePreferences(entries: Record<string, string>) {
     this.preferences.save(entries)
