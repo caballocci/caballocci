@@ -254,6 +254,14 @@ export interface AppResourceUsage {
   sampledAt: number
 }
 
+/** Comportamiento de la ventana principal y del arranque (persistido en app_preferences). */
+export interface AppBehavior {
+  /** Si está activado (por defecto), cerrar la ventana la oculta en la bandeja en lugar de salir. */
+  closeToTray: boolean
+  /** Si está activado, caballocci se registra para iniciarse con el sistema operativo. */
+  autostart: boolean
+}
+
 export interface OptionalIntegration {
   id: string
   name: string
@@ -458,6 +466,8 @@ export interface ElectronAPI {
     openSyncthingUi(url: string): Promise<void>
     openMobileAppDownload(): Promise<{ available: boolean }>
     createBackup(): Promise<string>
+    getBehavior(): Promise<AppBehavior>
+    setBehavior(behavior: Partial<AppBehavior>): Promise<AppBehavior>
   }
   updates: {
     getState(): Promise<UpdateState>

@@ -163,6 +163,8 @@ contextBridge.exposeInMainWorld('planner', {
     openSyncthingUi: (url: string) => ipcRenderer.invoke('system:open-syncthing-ui', url),
     openMobileAppDownload: () => ipcRenderer.invoke('system:open-mobile-app-download'),
     createBackup: () => ipcRenderer.invoke('system:create-backup'),
+    getBehavior: () => ipcRenderer.invoke('settings:get-behavior'),
+    setBehavior: (behavior: { closeToTray?: boolean; autostart?: boolean }) => ipcRenderer.invoke('settings:set-behavior', behavior),
   },
   updates: {
     getState: () => ipcRenderer.invoke('updates:get-state'),
