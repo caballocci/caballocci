@@ -1,4 +1,5 @@
-import type { Dispatch, FormEvent, SetStateAction } from 'react'
+import { useEffect, useRef, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { createPortal } from 'react-dom'
 import type { Post, WorkGroup } from '../../shared/types'
 
 type PendingGroupAction = { type: 'archive' | 'restore' | 'delete'; group: WorkGroup }
@@ -39,8 +40,11 @@ export function BoardWorkGroupDialogs({
   confirmGroupAction, pendingMediaCompression, setPendingMediaCompression,
   confirmMediaCompression,
 }: BoardWorkGroupDialogsProps) {
-  return <>
-    {groupFormOpen && <div className="work-group-form-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !savingGroup) setGroupFormOpen(false) }}>
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  // More reliable than autoFocus after a Chromium drag session swallows the first click's focus.
+  useEffect(() => { if (groupFormOpen) nameInputRef.current?.focus() }, [groupFormOpen])
+  return createPortal(<>
+    {groupFormOpen && <div className="work-group-form-backdrop" onKeyDown={event => { if (event.key === 'Escape' && !savingGroup) setGroupFormOpen(false) }} onMouseDown={event => { if (event.target === event.currentTarget && !savingGroup) setGroupFormOpen(false) }}>
       <form className="work-group-form" role="dialog" aria-modal="true" aria-labelledby="work-group-form-title" onSubmit={submitGroupForm}>
         <header><span>COLECCIÓN DE TRABAJO</span><button type="button" aria-label="Cerrar" disabled={savingGroup} onClick={() => setGroupFormOpen(false)}>×</button></header>
         <h2 id="work-group-form-title">{editingGroupId ? 'Editar colección' : formParentName ? 'Nueva subcolección' : 'Crear colección'}</h2>
@@ -50,7 +54,7 @@ export function BoardWorkGroupDialogs({
             ? <>Dentro de <strong>{formParentName}</strong>. La subcolección organiza sus publicaciones sin cambiar sus estados.</>
             : <>Reúne publicaciones de una campaña, serie o proyecto. Sus estados no se modifican.</>}</p>
         <label htmlFor="work-group-name">Nombre</label>
-        <input id="work-group-name" autoFocus maxLength={120} required value={groupName} onChange={event => setGroupName(event.target.value)} placeholder="Ej. Lanzamiento de primavera" />
+        <input id="work-group-name" ref={nameInputRef} maxLength={120} required value={groupName} onChange={event => setGroupName(event.target.value)} placeholder="Ej. Lanzamiento de primavera" />
         <label htmlFor="work-group-description">Descripción <span>Opcional</span></label>
         <textarea id="work-group-description" maxLength={2000} rows={3} value={groupDescription} onChange={event => setGroupDescription(event.target.value)} placeholder="¿Qué tienen en común estas publicaciones?" />
         {!editingGroupId && <div className="work-group-form-hint">{selectedCount
@@ -86,5 +90,5 @@ export function BoardWorkGroupDialogs({
         <footer><button type="button" className="settings-button" onClick={() => setPendingMediaCompression(null)}>Cancelar</button><button type="button" className="work-group-danger-button" onClick={confirmMediaCompression}>Comprimir y liberar espacio</button></footer>
       </section>
     </div>}
-  </>
+  </>, document.body)
 }
