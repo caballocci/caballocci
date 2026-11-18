@@ -20,7 +20,7 @@ const DEFAULT_OPTIONS: PostCopyOptions = {
 export function PostCopyDialog({ posts, onClose }: { posts: PostCopyInput[]; onClose(): void }) {
   const [options, setOptions] = useState<PostCopyOptions>(DEFAULT_OPTIONS)
   const [feedback, setFeedback] = useState('')
-  // La última selección se recuerda entre sesiones vía preferencias.
+  // La última selección copiada con éxito se recuerda entre sesiones vía preferencias.
   useEffect(() => {
     let active = true
     void window.planner.preferences.sync({})
@@ -32,11 +32,7 @@ export function PostCopyDialog({ posts, onClose }: { posts: PostCopyInput[]; onC
     return () => { active = false }
   }, [])
   const update = (next: (current: PostCopyOptions) => PostCopyOptions) => {
-    setOptions(current => {
-      const value = next(current)
-      void window.planner.preferences.sync({ [POST_COPY_PREFERENCE_KEY]: JSON.stringify(value) }).catch(() => { /* Opcional. */ })
-      return value
-    })
+    setOptions(next)
   }
   const result = buildMultiPostCopy(posts, options)
   const presets: Array<{ label: string; apply(): void }> = [
@@ -49,6 +45,8 @@ export function PostCopyDialog({ posts, onClose }: { posts: PostCopyInput[]; onC
     if (!result.text) return
     await runWithErrorReporting(async () => {
       await window.planner.clipboard.write(result.text, result.html)
+      // Recuerda la última selección que terminó en un copiar exitoso (no los cambios intermedios).
+      await window.planner.preferences.sync({ [POST_COPY_PREFERENCE_KEY]: JSON.stringify(options) }).catch(() => { /* Opcional. */ })
       setFeedback(`Copiado: ${result.summary}`)
     }, 'No se pudo copiar la publicación')
   }

@@ -1,7 +1,9 @@
 /* Navegación de colecciones: una sola barra, igual dentro y fuera de una colección */
 .board-collection-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: -6px 0 14px; padding-bottom: 8px; border-bottom: 1px solid #222b25; --pill-border: transparent; --pill-radius: 6px; --pill-bg: transparent; --pill-color: #9aa69e; --pill-hover-bg: #1b231e; --pill-hover-color: #e8eee9; --pill-active-bg: #202722; --pill-accent: #d0a64b; --chip-height: 32px; }
-.board-collection-tabs { display: flex; flex: 1 1 320px; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.board-collection-tabs::-webkit-scrollbar { display: none; }
+.board-collection-tabs { display: flex; flex: 1 1 320px; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; scrollbar-color: #465149 transparent; }
+.board-collection-tabs::-webkit-scrollbar { height: 4px; }
+.board-collection-tabs::-webkit-scrollbar-track { background: transparent; }
+.board-collection-tabs::-webkit-scrollbar-thumb { background: #465149; border-radius: 2px; }
 .board-collection-item { position: relative; display: flex; flex: none; align-items: center; }
 .board-collection-tab { position: relative; display: inline-flex; flex: none; align-items: center; gap: 7px; max-width: 220px; height: 36px; padding: 0 12px; border: 1px solid var(--pill-border); border-radius: var(--pill-radius); background: var(--pill-bg); color: var(--pill-color); font-size: 12px; font-weight: 600; cursor: pointer; transition: background .14s ease, color .14s ease, border-color .14s ease; }
 .board-collection-tab:hover { border-color: var(--pill-border); background: var(--pill-hover-bg); color: var(--pill-hover-color); }

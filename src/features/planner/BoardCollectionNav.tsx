@@ -98,7 +98,7 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
       <button type="button" onClick={() => setActiveWorkGroup(null)}>Colecciones</button>
       {path.map((crumb, index) => <span key={crumb.id}><em aria-hidden="true">›</em><button type="button" className={index === path.length - 1 ? 'active' : ''} onClick={() => setActiveWorkGroup(crumb.id)}>{crumb.name}</button></span>)}
     </div>}
-    <div className="board-collection-tabs">
+    <div className="board-collection-tabs" onWheel={event => { if (event.deltaY && !event.shiftKey) event.currentTarget.scrollLeft += event.deltaY }}>
       {!selectedWorkGroup && <button type="button" className="board-collection-tab" aria-current="page" onClick={() => setActiveWorkGroup(null)}>
         <Inbox size={14} /><span className="board-collection-tab-name">Sin colección</span><em>{unassignedCount}</em>
       </button>}
