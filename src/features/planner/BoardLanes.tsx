@@ -9,7 +9,7 @@ import { availableParsedFields, groupPayloadPosts, isStructuredPostText, parsePo
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ArrowDown, ArrowUp, ArrowUpFromLine, CalendarDays, ChevronDown, ChevronRight, ChevronUp, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers, Layers3, MoreHorizontal, Network, Replace, Trash2 } from 'lucide-react'
-import { contentLabels, getPlatformMeta, stages, statusMeta } from '../../shared/constants'
+import { contentLabels, stages, statusMeta } from '../../shared/constants'
 import { postColors } from '../../shared/postColors'
 import { runWithErrorReporting } from '../../app/errors'
 import { usePlanner } from '../../app/store'
@@ -163,6 +163,9 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     if (duplicateFeedbackTimer.current !== null) window.clearTimeout(duplicateFeedbackTimer.current)
     duplicateFeedbackTimer.current = window.setTimeout(() => setDuplicatedPostId(null), 2500)
   }
+
+  // Vista previa al pasar el mouse sobre la pila cerrada: cuántos miembros se listan antes de «+N más».
+  const STACK_PREVIEW_LIMIT = 3
 
   const toggleStackExpand = (stackId: string) => setExpandedStacks(current => { const next = new Set(current); if (next.has(stackId)) next.delete(stackId); else next.add(stackId); return next })
 
@@ -329,15 +332,11 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
           const inDropColumn = dropTarget?.status === status
           const cellClass = `board-lane-cell${columnPosts.length ? '' : ' empty'}${inDropColumn ? ' drop-column' : ''}${dropTarget?.key === cellKey ? ' drop-over' : ''}`
           const selectStack = (memberIds: string[]) => onSelectStatus(memberIds)
-          const renderPostArticle = (post: Post, stack?: { memberIds: string[]; count: number }) => {
-            const stackMembers = stack?.memberIds
-            const stackCount = stack?.count
+          const renderPostArticle = (post: Post) => {
             const otherMemberships = activeGroups.filter(group => group.id !== lane.group?.id && group.postIds.includes(post.id)).map(group => group.name)
             const overdue = (post.status === 'idea' || post.status === 'draft') && post.scheduledAt && parseISO(post.scheduledAt).getTime() < Date.now()
             const ContentIcon = post.contentType === 'reel' ? Film : post.contentType === 'carousel' ? Images : FileText
-            const memberSelected = stackMembers ? stackMembers.every(id => selected.has(id)) : selected.has(post.id)
-            const memberSomeSelected = stackMembers ? stackMembers.some(id => selected.has(id)) : memberSelected
-            const cardClass = `board-card${memberSelected ? ' selected' : ''}${pickedPostIds.has(post.id) ? ' session-picked' : ''}${post.color !== postColors[0].value ? ' has-custom-color' : ''}${stackMembers ? ' board-stack-card' : ''}${stackMembers?.some(id => dragging.has(id)) || dragging.has(post.id) ? ' is-dragging' : ''}${duplicatedPostId === post.id || justPastedIds.has(post.id) ? ' just-duplicated' : ''}`
+            const cardClass = `board-card${selected.has(post.id) ? ' selected' : ''}${pickedPostIds.has(post.id) ? ' session-picked' : ''}${post.color !== postColors[0].value ? ' has-custom-color' : ''}${dragging.has(post.id) ? ' is-dragging' : ''}${duplicatedPostId === post.id || justPastedIds.has(post.id) ? ' just-duplicated' : ''}`
             return <article
               data-area-select-id={post.id}
               tabIndex={0}
@@ -349,19 +348,16 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
               onDragOver={event => collapsedCardDragOver(event, post, status)}
               onDragLeave={() => setStackDropTarget(current => current === post.id ? null : current)}
               onDrop={event => collapsedCardDrop(event, post, status)}
-              onContextMenu={event => openContextMenu(event, post, stackMembers)}
-              onClick={event => { if (stackMembers) { toggleStackExpand(post.stackId!); return } if (onPickPost?.(post.id)) return; if (event.shiftKey || event.ctrlKey || event.metaKey || selected.size > 0) onToggle(post.id, event.shiftKey, order); else onSelect(post.id) }}
-              onKeyDown={event => { if (stackMembers && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggleStackExpand(post.stackId!); return } if (stackMembers) return; if (event.key === 'Enter') { event.preventDefault(); if (onPickPost?.(post.id)) return; onSelect(post.id) } }}
-              aria-expanded={stackMembers ? expandedStacks.has(post.stackId!) : undefined}
-              aria-label={stackMembers ? `Pila de ${stackCount} publicaciones` : undefined}
+              onContextMenu={event => openContextMenu(event, post)}
+              onClick={event => { if (onPickPost?.(post.id)) return; if (event.shiftKey || event.ctrlKey || event.metaKey || selected.size > 0) onToggle(post.id, event.shiftKey, order); else onSelect(post.id) }}
+              onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); if (onPickPost?.(post.id)) return; onSelect(post.id) } }}
             >
               <div className="board-card-top">
                 <label className="board-select-hit" onClick={event => event.stopPropagation()}>
-                  <input type="checkbox" checked={memberSelected} ref={stackMembers ? input => { if (input) input.indeterminate = memberSomeSelected && !memberSelected } : undefined} onChange={event => stackMembers ? selectStack(stackMembers) : onToggle(post.id, event.nativeEvent instanceof MouseEvent && event.nativeEvent.shiftKey, order)} aria-label={stackMembers ? `Seleccionar pila de ${stackCount}` : `Seleccionar ${post.title || 'publicación'}`} />
+                  <input type="checkbox" checked={selected.has(post.id)} onChange={event => onToggle(post.id, event.nativeEvent instanceof MouseEvent && event.nativeEvent.shiftKey, order)} aria-label={`Seleccionar ${post.title || 'publicación'}`} />
                 </label>
                 <span className="board-platforms">{post.platforms.map(platform => <PlatformMark key={platform} platform={platform} small />)}</span>
                 {otherMemberships.length > 0 && <span className="board-duplicate-marker" role="img" title={`La misma publicación también está en: ${otherMemberships.join(', ')}`} aria-label={`También en ${otherMemberships.join(', ')}`}><Layers3 size={12} /><span>{otherMemberships.length + 1}</span></span>}
-                {stack && <span className="board-stack-chip" title={`Pila de ${stackCount} publicaciones`}><Layers size={12} />{stackCount}</span>}
                 <span className="board-content-type" title={contentLabels[post.contentType]}><ContentIcon size={12} /><span>{contentLabels[post.contentType].slice(0, 5)}</span></span>
                 <div className="board-card-mobile-slot"><MobileCardStatus state={mobilePublicationState} postId={post.id} detailLevel={boardCardDetailLevel} /></div>
               </div>
@@ -373,11 +369,64 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
               </div>
             </article>
           }
+          /** Card cerrada de la pila: unidad organizativa sobria; el contenido es una capa secundaria.
+              Hover/foco expande una vista previa (sin desplazar la columna); clic abre la lista interactiva. */
+          const renderStackClosed = (items: Post[], stackId: string, columnStatus: Post['status']) => {
+            const memberIds = items.map(member => member.id)
+            const stackCount = items.length
+            const top = items[0]
+            const memberSelected = memberIds.every(id => selected.has(id))
+            const memberSomeSelected = memberIds.some(id => selected.has(id))
+            const cardClass = `board-card board-stack-card board-stack-summary${memberSelected ? ' selected' : ''}${memberIds.some(id => dragging.has(id)) || dragging.has(top.id) ? ' is-dragging' : ''}`
+            const scheduled = items.filter(member => member.scheduledAt).map(member => ({ post: member, time: parseISO(member.scheduledAt as string).getTime() })).sort((a, b) => a.time - b.time)
+            const nextScheduled = scheduled[0] ?? null
+            const overdue = nextScheduled !== null && (columnStatus === 'idea' || columnStatus === 'draft') && nextScheduled.time < Date.now()
+            const typeCounts = new Map<ContentType, number>()
+            for (const member of items) typeCounts.set(member.contentType, (typeCounts.get(member.contentType) ?? 0) + 1)
+            const platformUnion: string[] = []
+            for (const member of items) for (const platform of member.platforms) if (!platformUnion.includes(platform)) platformUnion.push(platform)
+            const previewItems = items.slice(0, STACK_PREVIEW_LIMIT)
+            const extraCount = items.length - previewItems.length
+            return <article
+              data-area-select-id={top.id}
+              tabIndex={0}
+              className={cardClass}
+              draggable
+              onDragStart={event => startDrag(event, top)}
+              onDragEnd={() => { dragIds.current = []; resetDrag() }}
+              onDragOver={event => collapsedCardDragOver(event, top, columnStatus)}
+              onDragLeave={() => setStackDropTarget(current => current === top.id ? null : current)}
+              onDrop={event => collapsedCardDrop(event, top, columnStatus)}
+              onContextMenu={event => openContextMenu(event, top, memberIds)}
+              onClick={() => toggleStackExpand(stackId)}
+              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleStackExpand(stackId) } }}
+              aria-expanded={false}
+              aria-label={`Pila de ${stackCount} publicaciones`}
+            >
+              <label className="board-select-hit" onClick={event => event.stopPropagation()}>
+                <input type="checkbox" checked={memberSelected} ref={input => { if (input) input.indeterminate = memberSomeSelected && !memberSelected }} onChange={() => selectStack(memberIds)} aria-label={`Seleccionar pila de ${stackCount}`} />
+              </label>
+              <div className="board-stack-summary-row">
+                <span className="board-stack-summary-badge"><Layers size={14} aria-hidden="true" /><b>{stackCount}</b></span>
+                <span className="board-stack-summary-types">{[...typeCounts].map(([type, count]) => { const Icon = stackContentIcon(type); return <span key={type} className="board-stack-summary-type"><Icon size={12} aria-hidden="true" />{count > 1 && <i>×{count}</i>}</span> })}</span>
+                <span className="board-stack-summary-platforms">{platformUnion.slice(0, 5).map(platform => <PlatformMark key={platform} platform={platform} small />)}</span>
+              </div>
+              <div className="board-stack-summary-foot">
+                {nextScheduled
+                  ? <span className={`board-stack-summary-date${overdue ? ' overdue' : ''}`}><CalendarDays size={11} aria-hidden="true" /><span>{format(nextScheduled.time, 'd MMM', { locale: es })}</span><time dateTime={nextScheduled.post.scheduledAt ?? undefined}>{format(nextScheduled.time, 'HH:mm')}</time>{overdue && <b>Atrasada</b>}</span>
+                  : <span className="board-stack-summary-nodate">Sin fecha</span>}
+              </div>
+              <div className="board-stack-preview" aria-hidden="true">
+                {previewItems.map(member => { const Icon = stackContentIcon(member.contentType); return <div key={member.id} className="board-stack-preview-item"><Icon size={11} aria-hidden="true" /><span>{member.title || 'Publicación sin título'}</span></div> })}
+                {extraCount > 0 && <div className="board-stack-preview-more">+{extraCount} más</div>}
+              </div>
+            </article>
+          }
           const renderStackExpanded = (items: Post[], stackId: string) => {
             const orderIds = items.map(member => member.id)
             return <div className="board-stack-expanded" role="list" aria-label={`Pila de ${items.length} publicaciones`} key={`expanded-${stackId}`}>
               <div className="board-stack-expanded-header">
-                <Layers size={13} aria-hidden="true" /><strong>Pila · {items.length}</strong><small>Arrastrá para sacar</small>
+                <Layers size={13} aria-hidden="true" /><strong>{items.length} publicaciones</strong>
                 <button type="button" className="board-stack-collapse" aria-label="Colapsar pila" title="Colapsar pila" onClick={() => toggleStackExpand(stackId)}><ChevronUp size={14} /></button>
               </div>
               {items.map((member, index) => <div
@@ -399,8 +448,8 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
                 <label className="board-select-hit" onClick={event => event.stopPropagation()}>
                   <input type="checkbox" checked={selected.has(member.id)} onChange={event => onToggle(member.id, event.nativeEvent instanceof MouseEvent && event.nativeEvent.shiftKey, orderIds)} aria-label={`Seleccionar ${member.title || 'publicación'}`} />
                 </label>
-                <span className="board-stack-member-icons" title={`${contentLabels[member.contentType]}${member.platforms[0] ? ` · ${getPlatformMeta(member.platforms[0]).label}` : ''}`} aria-hidden="true">{(() => { const Icon = stackContentIcon(member.contentType); return <Icon size={12} /> })()}{member.platforms[0] && <PlatformMark platform={member.platforms[0]} small />}</span>
-                <span className="board-stack-member-title" title={member.title || 'Publicación sin título'}>{member.title || 'Publicación sin título'}</span>
+                <span className="board-stack-member-icons" aria-hidden="true">{(() => { const Icon = stackContentIcon(member.contentType); return <Icon size={12} /> })()}{member.platforms[0] && <PlatformMark platform={member.platforms[0]} small />}</span>
+                <span className="board-stack-member-title">{member.title || 'Publicación sin título'}</span>
                 {member.scheduledAt && <span className="board-stack-member-date"><CalendarDays size={11} aria-hidden="true" />{format(parseISO(member.scheduledAt), 'd MMM', { locale: es })}</span>}
                 <button type="button" className="board-stack-member-unstack" aria-label={`Sacar de la pila: ${member.title || 'publicación'}`} title="Sacar de la pila" onClick={event => { event.stopPropagation(); void runWithErrorReporting(() => usePlanner.getState().unstackPost(member.id), 'No se pudo desapilar') }}><ArrowUpFromLine size={13} /></button>
               </div>)}
@@ -430,10 +479,10 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
                 {renderPostArticle(top)}
               </div>
               if (expandedStacks.has(item.stackId)) return <div className="board-card-slot board-stack-slot expanded" key={item.key}>{renderStackExpanded(item.items, item.stackId)}</div>
-              return <div className={`board-card-slot board-stack-slot${stackDropTarget === top.id ? ' stack-drop-target' : ''}`} key={item.key}>
+              return <div className={`board-card-slot board-stack-slot stack-closed${stackDropTarget === top.id ? ' stack-drop-target' : ''}`} key={item.key}>
                 <div className="board-stack-layer board-stack-layer-1" aria-hidden="true" />
                 <div className="board-stack-layer board-stack-layer-2" aria-hidden="true" />
-                {renderPostArticle(top, { memberIds: item.items.map(member => member.id), count: item.items.length })}
+                {renderStackClosed(item.items, item.stackId, status)}
               </div>
             })}
             {!columnPosts.length && <div className="board-drop-hint">{inDropColumn ? 'Soltá acá' : 'Arrastrá una publicación acá'}</div>}
