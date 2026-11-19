@@ -12,7 +12,7 @@
     "build": "tsc -b && vite build && tsc -p electron/tsconfig.json",
     "preview": "vite preview",
     "start": "electron .",
-    "test": "tsc -p tsconfig.test.json --pretty false && tsc -p electron/tsconfig.json --pretty false && node --experimental-strip-types --test test/features/ideas/cluster-triage.test.mts test/shared/clipboard-payload.test.mts test/electron/work-groups.test.mts test/electron/media-compression.test.mts test/electron/media-export.test.mts test/electron/media-batch-layout.test.mts test/electron/mobile-sync.test.mts test/electron/post-stacks.test.mts",
+    "test": "tsc -p tsconfig.test.json --pretty false && tsc -p electron/tsconfig.json --pretty false && node --experimental-strip-types --test test/features/ideas/cluster-triage.test.mts test/shared/clipboard-payload.test.mts test/shared/release-notes.test.mts test/electron/work-groups.test.mts test/electron/media-compression.test.mts test/electron/media-export.test.mts test/electron/media-batch-layout.test.mts test/electron/mobile-sync.test.mts test/electron/post-stacks.test.mts",
     "typecheck": "tsc -b --pretty false",
     "dist:win": "npm run build && cross-env ELECTRON_CACHE=.electron-builder-cache/electron ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --win nsis && node scripts/verify-release.mjs --artifacts"
   },
@@ -26,6 +26,8 @@
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "sql.js": "^1.12.0",
     "zustand": "^5.0.2"
   },

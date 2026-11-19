@@ -158,6 +158,7 @@ npm.cmd run dist:win    # instalador NSIS x64 en release/
 ## Documentación
 
 - [Sincronización móvil y formatos de intercambio](docs/MOBILE-SYNC.md)
+- [Formato de las notas de versión](docs/RELEASE-NOTES.md)
 - [Colecciones anidadas](docs/nested-collections.md)
 - [Pilas de publicaciones](docs/post-stacks.md)
 - [Política y modelo de seguridad](SECURITY.md)

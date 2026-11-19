@@ -19,7 +19,7 @@
 .settings-note.success{color:#73c99b;overflow-wrap:anywhere}
 .release-notes{max-height:260px;overflow:auto;margin-top:10px;padding:12px;border:1px solid var(--line);background:#171c19}
 .release-notes strong{font-size:10px}
-.release-notes p{margin:8px 0 0;color:#aeb8b1;font-size:10px;line-height:16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.release-notes p{margin:8px 0 0;color:#aeb8b1;font-size:11px;line-height:1.65}.release-notes .release-notes-markdown{margin-top:8px;font-size:12px}.release-notes .release-notes-markdown .markdown-body{font-size:12px;line-height:1.6}
 .path-list{display:grid;margin:0;border-top:1px solid var(--line)}
 .path-list>div{padding:12px 0;border-bottom:1px solid var(--line);display:grid;gap:5px}
 .path-list dt{font-size:9px;color:var(--muted)}

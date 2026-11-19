@@ -3,6 +3,7 @@ import { Archive, BookOpen, Download, ExternalLink, FolderOpen, Globe2, RefreshC
 import { reportAppError, runWithErrorReporting } from '../../app/errors'
 import { ViewHeading } from '../../components/layout/AppShell'
 import { MobileAppDownload } from '../../components/MobileAppDownload'
+import { ReleaseNotesMarkdown } from '../../components/ReleaseNotesMarkdown'
 import type { AppBehavior, AppResourceUsage, SystemInfo, UpdateState } from '../../shared/types'
 import { MobileSyncSettings } from './MobileSyncSettings'
 import { OptionalIntegrations } from './OptionalIntegrations'
@@ -104,7 +105,9 @@ export function AboutUpdates() {
         </div>}
         {notesOpen && update?.availableVersion && <div className="release-notes">
           <strong>Novedades de la versión {update.availableVersion}</strong>
-          <p>{update.releaseNotes || 'El lanzamiento no incluye notas detalladas. Puedes consultar la publicación en GitHub.'}</p>
+          {update.releaseNotes
+            ? <ReleaseNotesMarkdown markdown={update.releaseNotes} className="release-notes-markdown" />
+            : <p>El lanzamiento no incluye notas detalladas. Puedes consultar la publicación en GitHub.</p>}
         </div>}
         {update?.status === 'downloaded' && <p className="settings-note success">{update.preview ? 'La actualización simulada está lista para continuar.' : 'La actualización se aplicará en segundo plano y caballocci volverá a abrirse.'}</p>}
         {update?.status === 'updated' && <p className="settings-note success">{update.message}</p>}

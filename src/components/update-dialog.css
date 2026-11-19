@@ -1,22 +1,33 @@
 .update-dialog-backdrop{position:fixed;inset:0;z-index:11000;display:grid;place-items:center;padding:24px;background:#080b09b8;backdrop-filter:blur(4px)}
-.update-dialog{position:relative;width:min(540px,100%);max-height:min(680px,calc(100vh - 48px));overflow:auto;border:1px solid #3a493e;border-top:3px solid #8ab896;border-radius:10px;background:linear-gradient(145deg,#19201b,#111613);box-shadow:0 28px 90px #000b;padding:30px;color:#e2e9e3}
-.update-dialog-close{position:absolute;top:15px;right:15px;display:grid;place-items:center;width:32px;height:32px;border:1px solid #354038;border-radius:5px;background:#1a211c;color:#aab5ac;cursor:pointer}
-.update-dialog-close:hover{color:#fff;background:#273129}
-.update-dialog-eyebrow{color:#91c39d;font:9px 'DM Mono',monospace;letter-spacing:.12em}
-.update-dialog h2{margin:8px 36px 5px 0;font-size:23px;letter-spacing:-.03em}
-.update-dialog-message{margin:0;color:#aab5ad;font-size:12px}
-.update-dialog-notes{max-height:300px;overflow:auto;margin-top:22px;padding:16px;border:1px solid #303a33;border-radius:6px;background:#111613}
-.update-dialog-notes strong{font-size:11px}
-.update-dialog-notes p{margin:9px 0 0;color:#b5c0b7;font-size:11px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
-.update-dialog-progress{display:flex;align-items:center;gap:10px;margin-top:16px;color:#b5c0b7;font:10px 'DM Mono',monospace}
-.update-dialog-progress progress{flex:1;height:6px;accent-color:#8ab896}
-.update-dialog.installing{width:min(460px,100%);text-align:center;padding:38px 34px}
-.update-dialog.installing .update-dialog-eyebrow{color:#e0b45f}
-.update-dialog.installing h2{margin:12px 0 8px}
-.update-dialog.installing .update-dialog-message{line-height:1.7}
-.update-dialog-guidance{margin:8px 0 0;color:#aab5ad;font-size:12px;line-height:1.7}
+.update-dialog{position:relative;width:min(540px,100%);max-height:min(700px,calc(100vh - 48px));overflow:auto;border:1px solid #3a3b32;border-top:3px solid var(--accent);border-radius:10px;background:linear-gradient(145deg,#1a201c,#121713);box-shadow:0 28px 90px #000b;padding:26px 28px 22px;color:var(--text);outline:0}
+.update-dialog h2{margin:2px 0 10px;font-size:22px;letter-spacing:-.02em;line-height:1.25;color:#f2f5ef}
+.update-dialog-summary{margin:0;color:#c6cec7;font-size:13px;line-height:1.65}
+.update-dialog-summary .markdown-body{font-size:13px;line-height:1.65}
+.update-dialog-summary .markdown-body p:first-child{margin-top:0}
+.update-dialog-summary .markdown-body p:last-child{margin-bottom:0}
+.update-dialog-message{margin:0;color:var(--muted);font-size:12px;line-height:1.65}
+.update-dialog-guidance{margin:10px 0 0;color:#a9b3ad;font-size:12px;line-height:1.7}
+.update-dialog-toggle{margin-top:12px;padding:0;border:0;background:transparent;color:#ffa68d;font-size:12px;font-weight:650;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:4px}
+.update-dialog-toggle:hover{color:#ffc3ae;text-decoration:underline;text-underline-offset:3px}
+.update-dialog-notes{max-height:280px;overflow:auto;margin-top:12px;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:#10150f;font-size:14px;line-height:1.65}
+.update-dialog-notes .markdown-body{font-size:14px;line-height:1.65}
+.update-dialog-progress{display:flex;align-items:center;gap:10px;margin-top:16px;color:#c6cec7;font:11px 'DM Mono',monospace}
+.update-dialog-progress progress{flex:1;height:6px;accent-color:var(--accent)}
+.update-dialog.installing{width:min(460px,100%);text-align:center;padding:36px 32px}
+.update-dialog.installing h2{margin-top:6px}
+.update-dialog.installing .update-dialog-guidance{margin-top:10px}
 .update-install-progress{height:7px;overflow:hidden;margin-top:24px;border-radius:8px;background:#29332c}
-.update-install-progress span{display:block;width:38%;height:100%;border-radius:inherit;background:#8ab896;animation:update-install-sweep 1.35s ease-in-out infinite}
+.update-install-progress span{display:block;width:38%;height:100%;border-radius:inherit;background:var(--accent);animation:update-install-sweep 1.35s ease-in-out infinite}
 @keyframes update-install-sweep{from{transform:translateX(-110%)}to{transform:translateX(290%)}}
-.update-dialog footer{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:20px}
-@media(max-width:600px){.update-dialog{padding:24px 18px}.update-dialog footer{justify-content:stretch}.update-dialog footer button{flex:1;justify-content:center}}
+.update-dialog :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.update-dialog :focus:not(:focus-visible){outline:0}
+.update-dialog footer{display:flex;align-items:center;gap:14px;margin-top:22px}
+.update-dialog-secondary{display:flex;align-items:center;gap:14px;margin-right:auto}
+.settings-button.quiet{background:transparent;border-color:transparent;color:#9aa69f;padding:0 6px}
+.settings-button.quiet:hover{background:#1d2420;color:#e7ece8}
+.update-dialog-link{display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;color:#b9a295;font-size:11px;cursor:pointer;border-radius:4px}
+.update-dialog-link:hover{color:#ffcfba;text-decoration:underline;text-underline-offset:3px}
+.update-dialog footer .settings-button.primary{margin-left:auto;height:40px;padding:0 18px;font-size:12px;display:inline-flex;align-items:center;gap:8px}
+@media(max-width:600px){.update-dialog{padding:22px 18px}.update-dialog footer{flex-wrap:wrap}.update-dialog-secondary{margin-right:0;width:100%}.update-dialog footer .settings-button.primary{margin-left:auto}}
+
+.update-dialog footer:empty{display:none}
