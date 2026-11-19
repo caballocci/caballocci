@@ -9,6 +9,9 @@
   --stack-muted: #93a096;
 }
 .board-stack-slot { overflow: visible; z-index: 2; }
+/* Cada slot es un contexto de apilamiento (z-index: 2): sin esto, la card que se expande al hacer hover
+   (o la pila abierta con su tooltip) queda DEBAJO de los slots siguientes, que pintan encima por orden en el DOM. */
+.board-card-slot:hover, .board-card-slot:focus-within { z-index: 6; }
 .board-stack-slot.expanded { height: auto; }
 .board-stack-layer { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; border: 1px solid #2d3730; border-radius: 6px; background: #131815; pointer-events: none; transition: transform .22s ease-out, opacity .18s ease-out; transition-delay: 0s; }
 /* Capa 1 = segundo miembro, capa 2 = tercero. El tinte es suave: da ambiente sin tapar la tarjeta. */
@@ -47,18 +50,8 @@
 .board-stack-summary-title { position: relative; display: flex; flex: none; align-items: baseline; gap: 6px; min-width: 0; margin-top: 7px; color: #e6ece7; font-size: 11.5px; font-weight: 600; line-height: 15px; }
 .board-stack-summary-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-stack-summary-title > em { flex: none; color: var(--stack-muted); font: 600 9px 'DM Mono', monospace; font-style: normal; }
-/* Tooltip animado al reposar el puntero (o enfocar la tarjeta): revela el título completo.
-   Mismo retardo de entrada que el preview (~.35s), salida inmediata; sin tooltip nativo. */
-.board-stack-summary-title::before,
-.board-stack-summary-title::after { opacity: 0; pointer-events: none; transition: opacity .16s ease, transform .22s cubic-bezier(.2,.7,.2,1); }
-/* Caret: cuadrado girado 45°, solo los lados que miran hacia el título llevan borde. */
-.board-stack-summary-title::before { content: ''; position: absolute; z-index: 31; top: calc(100% + 2px); left: 14px; width: 8px; height: 8px; border-top: 1px solid #3a463d; border-left: 1px solid #3a463d; background: #1a211c; transform: translateY(4px) rotate(45deg) scale(.92); }
-.board-stack-summary-title::after { content: attr(data-full-title); position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; width: max-content; max-width: min(300px, 78vw); padding: 7px 10px; border: 1px solid #3a463d; border-radius: 6px; background: #1a211c; color: #e8eee9; box-shadow: 0 10px 26px #000c; font-size: 11px; font-weight: 500; line-height: 15px; white-space: normal; overflow-wrap: anywhere; transform: translateY(4px) scale(.96); transform-origin: 18px top; }
-.board-stack-summary:hover .board-stack-summary-title::before,
-.board-stack-summary:focus-within .board-stack-summary-title::before { opacity: 1; transform: rotate(45deg); transition-delay: .35s; }
-.board-stack-summary:hover .board-stack-summary-title::after,
-.board-stack-summary:focus-within .board-stack-summary-title::after { opacity: 1; transform: translateY(0) scale(1); transition-delay: .35s; }
-@media (prefers-reduced-motion: reduce) { .board-stack-summary-title::before, .board-stack-summary-title::after { transition: none; } }
+/* Sin tooltip en la card cerrada: el preview del hover ya lista todos los títulos y un tooltip encima lo taparia.
+   El tooltip animado vive en los miembros de la pila expandida (.board-stack-member-tip). */
 .board-stack-summary-foot { display: flex; flex: none; align-items: center; gap: 6px; margin-top: auto; padding-top: 6px; }
 .board-stack-summary-date { display: inline-flex; align-items: center; gap: 4px; color: #9aa69e; font-size: 9px; white-space: nowrap; }
 .board-stack-summary-date time { color: #c3ccc5; font-variant-numeric: tabular-nums; }
@@ -110,6 +103,16 @@
 .board-stack-member { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: start; min-width: 0; padding: 7px 8px; border: 1px solid var(--stack-row-border); border-radius: 5px; background: var(--stack-row); cursor: grab; }
 .board-stack-member-icons { grid-column: 1; grid-row: 1 / span 2; display: inline-flex; align-items: center; gap: 4px; height: 15px; color: #8d988f; }
 .board-stack-member-title { grid-column: 2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-width: 0; max-height: 30px; overflow: hidden; overflow-wrap: anywhere; color: #e8eee9; font-size: 11px; line-height: 15px; }
+/* Tooltip animado del miembro: título completo cuando el line-clamp lo recorta (data-truncated lo marca el JS al entrar).
+   Es un elemento real (no pseudo) porque ::before del miembro ya lo usa la franja de color.
+   Entrada con retardo (~.35s), salida inmediata; se oculta mientras se arrastra. */
+.board-stack-member-tip { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; box-sizing: border-box; width: max-content; max-width: 100%; padding: 7px 10px; border: 1px solid #3a463d; border-radius: 6px; background: #1a211c; color: #e8eee9; box-shadow: 0 10px 26px #000c; font-size: 11px; font-weight: 500; line-height: 15px; overflow-wrap: anywhere; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(4px) scale(.96); transform-origin: 18px top; transition: opacity .16s ease, transform .22s cubic-bezier(.2,.7,.2,1), visibility 0s linear .16s; }
+/* Caret: cuadrado girado 45°; solo los lados que miran al miembro llevan borde. */
+.board-stack-member-tip::before { position: absolute; top: -5px; left: 14px; width: 8px; height: 8px; border-top: 1px solid #3a463d; border-left: 1px solid #3a463d; background: #1a211c; content: ''; transform: rotate(45deg); }
+.board-stack-member[data-truncated]:hover:not(.is-dragging) .board-stack-member-tip,
+.board-stack-member[data-truncated]:focus-within:not(.is-dragging) .board-stack-member-tip { opacity: 1; visibility: visible; transform: none; transition-delay: .35s; }
+.board-lanes.is-dragging-cards .board-stack-member-tip { display: none; }
+@media (prefers-reduced-motion: reduce) { .board-stack-member-tip { transition: none; } }
 .board-stack-member-date { grid-column: 2; grid-row: 2; display: inline-flex; align-items: center; gap: 3px; margin-top: 3px; color: #9aa69e; font-size: 9px; font-variant-numeric: tabular-nums; }
 /* Fila inferior del miembro: fecha y estado móvil, sin deformar el alto del título. */
 .board-stack-member-meta { grid-column: 2; grid-row: 2; display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 3px; }

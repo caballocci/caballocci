@@ -31,6 +31,13 @@ export type StackHandlers = {
   unstack(member: Post): void
 }
 
+/** El tooltip animado de un miembro solo tiene sentido si el título está recortado por el line-clamp:
+    se marca al entrar/enfocar para que el CSS lo muestre únicamente en ese caso. */
+const flagTruncatedTitle = (member: HTMLElement) => {
+  const title = member.querySelector<HTMLElement>('.board-stack-member-title')
+  member.toggleAttribute('data-truncated', Boolean(title && title.scrollHeight > title.clientHeight + 1))
+}
+
 type StackSharedProps = {
   selected: Set<string>
   dragging: Set<string>
@@ -88,9 +95,9 @@ export function StackClosedCard({ items, stackId, columnStatus, selected, draggi
       <span className="board-stack-summary-types">{[...typeCounts].map(([type, count]) => { const Icon = stackContentIcon(type); return <span key={type} className="board-stack-summary-type"><Icon size={12} aria-hidden="true" />{count > 1 && <i>×{count}</i>}</span> })}</span>
       <span className="board-stack-summary-platforms">{platformUnion.slice(0, 5).map(platform => <PlatformMark key={platform} platform={platform} small />)}</span>
     </div>
-    {/* El título del miembro superior hace identificable la pila sin abrirla;
-        el tooltip animado revela el título completo (nativo no, para controlar timing y motion). */}
-    <div className="board-stack-summary-title" data-full-title={top.title || 'Publicación sin título'}>
+    {/* El título del miembro superior hace identificable la pila sin abrirla.
+        Los títulos completos los revela el preview del hover; el tooltip animado vive en los miembros de la pila expandida. */}
+    <div className="board-stack-summary-title">
       <span>{top.title || 'Publicación sin título'}</span>
       {stackCount > 1 && <em>+{stackCount - 1}</em>}
     </div>
@@ -148,6 +155,8 @@ export function StackExpandedList({ items, stackId, columnStatus, selected, drag
       onDragOver={event => handlers.memberDragOver(event, member, stackId, index)}
       onDrop={event => handlers.memberDrop(event, member, stackId)}
       onContextMenu={event => handlers.openContextMenu(event, member)}
+      onMouseEnter={event => flagTruncatedTitle(event.currentTarget)}
+      onFocus={event => flagTruncatedTitle(event.currentTarget)}
       onClick={event => { if (handlers.pickPost?.(member.id)) return; if (event.shiftKey || event.ctrlKey || event.metaKey || selected.size > 0) handlers.toggle(member.id, event.shiftKey, orderIds); else handlers.select(member.id) }}
       onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); if (handlers.pickPost?.(member.id)) return; handlers.select(member.id) } }}
     >
@@ -155,7 +164,8 @@ export function StackExpandedList({ items, stackId, columnStatus, selected, drag
         <input type="checkbox" checked={selected.has(member.id)} onChange={event => handlers.toggle(member.id, event.nativeEvent instanceof MouseEvent && event.nativeEvent.shiftKey, orderIds)} aria-label={`Seleccionar ${member.title || 'publicación'}`} />
       </label>
       <span className="board-stack-member-icons" aria-hidden="true">{(() => { const Icon = stackContentIcon(member.contentType); return <Icon size={12} /> })()}{member.platforms[0] && <PlatformMark platform={member.platforms[0]} small />}</span>
-      <span className="board-stack-member-title" title={member.title || undefined}>{member.title || 'Publicación sin título'}</span>
+      <span className="board-stack-member-title">{member.title || 'Publicación sin título'}</span>
+      {member.title && <span className="board-stack-member-tip" aria-hidden="true">{member.title}</span>}
       <div className="board-stack-member-meta">
         {member.scheduledAt && <span className="board-stack-member-date"><CalendarDays size={11} aria-hidden="true" />{format(parseISO(member.scheduledAt), 'd MMM', { locale: es })}</span>}
         <MobileCardStatus state={mobilePublicationState} postId={member.id} detailLevel={boardCardDetailLevel === 'hidden' ? 'hidden' : 'discreet'} />
