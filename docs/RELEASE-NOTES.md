@@ -62,6 +62,8 @@ El instalador y `latest.yml` llevan la versión en `version` y debe coincidir co
 
 ## Proceso de publicación y dónde encajan las notas
 
+El checklist operativo completo (bump, changelog, tag, push, verificación de assets) está en [Proceso de release](RELEASING.md).
+
 1. Prepara la rama y sube la versión: bumpea `package.json` raíz y `companion-apps/mobile-sync/package.json` (y sus locks) a `X.Y.Z`; añade la sección a `CHANGELOG.md`; `npm.cmd run typecheck`, `npm.cmd test`, `npm.cmd run build`.
 2. Commit `chore: vX.Y.Z` en la rama de trabajo; merge a `main` con `--no-ff` (`merge: release vX.Y.Z`); tag anotado `vX.Y.Z` en `main`; push de `main` y del tag.
 3. El workflow `Release Windows` (se dispara con el tag `v*`) compila el APK y el instalador, verifica los artefactos y **crea el GitHub Release con notas auto-generadas**. Esas notas NO son válidas para publicar: sustitúyelas.
