@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { ConceptMapLink, ConceptMapNode, Idea, IdeaAnalysisOptions, IdeaAnalysisProgress, IdeaCluster, IdeaInput, IdeaNeighbor, Post, PostInput, PostStatus, WorkGroup, WorkGroupInput } from '../shared/types'
 import { subtreeGroupIds } from '../shared/work-group-tree'
+import { readPostDateMarks, readPostInterestLevels, writePostDateMarks, writePostInterestLevels, type PostInterestLevel } from '../shared/post-marks'
 
 export type PlannerView = 'timeline' | 'calendar' | 'board' | 'concept-map' | 'ideas' | 'library' | 'sources' | 'about'
 
@@ -48,7 +49,10 @@ interface PlannerState {
   view: PlannerView
   selectedId: string | null
   selectedIdeaId: string | null
-  pendingConceptMapPostId: string | null
+  pendingConceptMapPostIds: string[]
+  /** Fecha registrada (una por publicación) y destacado (> / >> / >>>), guardados como preferencias. */
+  postDateMarks: Record<string, string>
+  postInterestLevels: Record<string, PostInterestLevel>
   query: string
   activeSpace: string | null
   customSpaces: string[]
@@ -86,7 +90,13 @@ interface PlannerState {
   select(id: string | null): void
   selectIdea(id: string | null): void
   requestConceptMapPost(id: string): void
+  /** Pide al mapa conceptual referenciar varias publicaciones (sin moverlas del tablero). */
+  requestConceptMapPosts(ids: string[]): void
   clearConceptMapPostRequest(): void
+  /** Marca con fecha; cada llamada reemplaza la marca anterior de esas publicaciones. */
+  markPostsDate(ids: string[]): void
+  clearPostsDateMark(ids: string[]): void
+  setPostsInterest(ids: string[], level: PostInterestLevel | null): void
   setQuery(query: string): void
   setActiveSpace(space: string | null): void
   setActiveWorkGroup(id: string | null): void
@@ -209,7 +219,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   view: 'timeline',
   selectedId: null,
   selectedIdeaId: null,
-  pendingConceptMapPostId: null,
+  pendingConceptMapPostIds: [],
+  postDateMarks: readPostDateMarks(),
+  postInterestLevels: readPostInterestLevels(),
   query: '',
   activeSpace: null,
   customSpaces: readStoredSpaces(),
@@ -368,8 +380,16 @@ export const usePlanner = create<PlannerState>((set, get) => ({
         }
         return idea
       })
+      // Las marcas no entran en el historial, pero no deben quedar huérfanas tras eliminar la publicación.
+      const postDateMarks = { ...state.postDateMarks }
+      const postInterestLevels = { ...state.postInterestLevels }
+      delete postDateMarks[id]
+      delete postInterestLevels[id]
+      writePostDateMarks(postDateMarks)
+      writePostInterestLevels(postInterestLevels)
       return {
         posts: state.posts.filter(post => post.id !== id), workGroups, ideas, selectedId: null,
+        postDateMarks, postInterestLevels,
         undoHistory: options?.recordHistory === false ? state.undoHistory : state.undoHistory.filter(action => !actionReferencesPost(action, id)),
         redoHistory: options?.recordHistory === false ? state.redoHistory : state.redoHistory.filter(action => !actionReferencesPost(action, id)),
         undoNotice: null,
@@ -619,8 +639,31 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   setView: (view) => set({ view }),
   select: (selectedId) => set({ selectedId }),
   selectIdea: (selectedIdeaId) => set({ selectedIdeaId }),
-  requestConceptMapPost: (id) => set({ pendingConceptMapPostId: id, view: 'concept-map' }),
-  clearConceptMapPostRequest: () => set({ pendingConceptMapPostId: null }),
+  requestConceptMapPost: (id) => set({ pendingConceptMapPostIds: [id], view: 'concept-map' }),
+  requestConceptMapPosts: (ids) => { const unique = [...new Set(ids)]; if (unique.length) set({ pendingConceptMapPostIds: unique, view: 'concept-map' }) },
+  clearConceptMapPostRequest: () => set({ pendingConceptMapPostIds: [] }),
+  markPostsDate: (ids) => set(state => {
+    const markedAt = new Date().toISOString()
+    const next = { ...state.postDateMarks }
+    for (const id of ids) next[id] = markedAt
+    writePostDateMarks(next)
+    return { postDateMarks: next }
+  }),
+  clearPostsDateMark: (ids) => set(state => {
+    const next = { ...state.postDateMarks }
+    for (const id of ids) delete next[id]
+    writePostDateMarks(next)
+    return { postDateMarks: next }
+  }),
+  setPostsInterest: (ids, level) => set(state => {
+    const next = { ...state.postInterestLevels }
+    for (const id of ids) {
+      if (level) next[id] = level
+      else delete next[id]
+    }
+    writePostInterestLevels(next)
+    return { postInterestLevels: next }
+  }),
   setQuery: (query) => set({ query }),
   setActiveSpace: (activeSpace) => set({ activeSpace, activeWorkGroupId: null, selectedId: null, selectedIdeaId: null }),
   setActiveWorkGroup: (activeWorkGroupId) => {

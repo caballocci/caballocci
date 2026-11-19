@@ -6,8 +6,8 @@ import { runWithErrorReporting } from '../../app/errors'
 import { usePlanner } from '../../app/store'
 import type { ConceptMapFolder, ConceptMapLink, ConceptMapNode, ConceptNodeKind, ConceptRelation, IdeaNeighbor } from '../../shared/types'
 import {
-  arrangeNodes, buildExport, contentTypeLabels, filterLabels, filterOrder, findFreeSlot, formatDate, ideaStatusLabels, isUnpublishedIdea,
-  kindLabels, layoutLabels, nodeSize, opportunityGroups, postStatusLabels, priorityLabels, relationLabel, relationOptions, sameTitle,
+  arrangeNodes, buildExport, contentTypeLabels, filterLabels, filterOrder, findFreeSlot, foldersInScope, formatDate, ideaStatusLabels, isUnpublishedIdea,
+  kindLabels, layoutLabels, nodeIdsInScope, nodeSize, opportunityGroups, postStatusLabels, priorityLabels, relationLabel, relationOptions, sameTitle,
   type LayoutMode, type NodeFilter,
 } from './conceptMapModel'
 import './concept-map.css'
@@ -20,8 +20,25 @@ type Camera = typeof defaultCamera
 
 function clampZoom(value: number) { return Math.min(1.8, Math.max(.45, Math.round(value * 100) / 100)) }
 function cameraKey(folderId: string | null) { return `caballocci.map-camera.${folderId || 'root'}` }
-const activeFolderKey = 'caballocci.map-active-folder'
-function loadActiveFolder() { return localStorage.getItem(activeFolderKey) || null }
+/** Carpeta activa recordada por ámbito: `global` para la raíz/todos los espacios y un id estable por espacio. */
+const activeFoldersKey = 'caballocci.map-active-folders'
+const legacyActiveFolderKey = 'caballocci.map-active-folder'
+function loadActiveFolders(): Record<string, string | null> {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(activeFoldersKey) || 'null')
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
+      const result: Record<string, string | null> = {}
+      for (const [scope, value] of Object.entries(stored as Record<string, unknown>)) result[scope] = typeof value === 'string' ? value : null
+      if (!('global' in result)) {
+        const legacy = localStorage.getItem(legacyActiveFolderKey)
+        if (legacy) result.global = legacy
+      }
+      return result
+    }
+  } catch { /* Preferencias opcionales. */ }
+  const legacy = localStorage.getItem(legacyActiveFolderKey)
+  return legacy ? { global: legacy } : {}
+}
 function loadCamera(folderId: string | null): Camera {
   try {
     const saved = JSON.parse(localStorage.getItem(cameraKey(folderId)) || '') as Camera
@@ -40,12 +57,15 @@ function isTyping(target: EventTarget | null) {
 }
 
 export function ConceptMap() {
-  const { posts, ideas, activeSpace, pendingConceptMapPostId, clearConceptMapPostRequest, undoHistory, redoHistory, undoNotice, undoSavedChange, redoSavedChange, recordConceptMapChange, saveIdea, save: savePost, ideaNeighbors, select: selectPost, selectIdea, setView } = usePlanner()
+  const { posts, ideas, activeSpace, spaceKey, pendingConceptMapPostIds, clearConceptMapPostRequest, undoHistory, redoHistory, undoNotice, undoSavedChange, redoSavedChange, recordConceptMapChange, saveIdea, save: savePost, ideaNeighbors, select: selectPost, selectIdea, setView } = usePlanner()
+  const activeFolderScope = activeSpace ? spaceKey(activeSpace) : 'global'
   const [nodes, setNodes] = useState<ConceptMapNode[]>([])
   const [mapLoaded, setMapLoaded] = useState(false)
   const [links, setLinks] = useState<ConceptMapLink[]>([])
   const [folders, setFolders] = useState<ConceptMapFolder[]>([])
-  const [activeFolderId, setActiveFolderId] = useState<string | null>(loadActiveFolder)
+  const [activeFolders, setActiveFolders] = useState<Record<string, string | null>>(loadActiveFolders)
+  const activeFolderId = activeFolders[activeFolderScope] ?? null
+  const setActiveFolderId = (id: string | null) => setActiveFolders(current => ({ ...current, [activeFolderScope]: id }))
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null)
@@ -100,10 +120,12 @@ export function ConceptMap() {
   const mappedPostIds = useMemo(() => new Set(nodes.filter(node => node.kind === 'post' && node.sourceId).map(node => node.sourceId as string)), [nodes])
   const postsToReference = useMemo(() => availablePosts.filter(post => !mappedPostIds.has(post.id) && `${post.title} ${post.caption}`.toLocaleLowerCase().includes(postPickerQuery.trim().toLocaleLowerCase())), [availablePosts, mappedPostIds, postPickerQuery])
   const pendingIdeas = useMemo(() => availableIdeas.filter(idea => (idea.status === 'inbox' || idea.status === 'developing') && !mappedIdeaIds.has(idea.id)), [availableIdeas, mappedIdeaIds])
+  const scopedFolders = useMemo(() => foldersInScope(folders, activeSpace), [activeSpace, folders])
+  const scopedNodeIds = useMemo(() => nodeIdsInScope(scopedFolders, nodes), [nodes, scopedFolders])
   const folderNodes = useMemo(() => nodes.filter(node => node.folderId === activeFolderId), [activeFolderId, nodes])
   const folderNodeById = useMemo(() => new Map(folderNodes.map(node => [node.id, node])), [folderNodes])
-  const visibleFolders = useMemo(() => folders.filter(folder => folder.parentId === activeFolderId), [activeFolderId, folders])
-  const path = useMemo(() => folderPath(folders, activeFolderId), [activeFolderId, folders])
+  const visibleFolders = useMemo(() => scopedFolders.filter(folder => folder.parentId === activeFolderId), [activeFolderId, scopedFolders])
+  const path = useMemo(() => folderPath(scopedFolders, activeFolderId), [activeFolderId, scopedFolders])
   const visibleWorld = useMemo(() => {
     const margin = 300 / camera.zoom; const right = camera.x + viewport.width / camera.zoom; const bottom = camera.y + viewport.height / camera.zoom
     return folderNodes.filter(node => node.x + nodeSize.width >= camera.x - margin && node.x <= right + margin && node.y + nodeSize.height >= camera.y - margin && node.y <= bottom + margin)
@@ -112,10 +134,10 @@ export function ConceptMap() {
   const linkedIds = useMemo(() => new Set(links.flatMap(link => [link.fromNodeId, link.toNodeId])), [links])
   const selected = folderNodes.find(node => node.id === selectedId) || null
   const selectedLink = links.find(link => link.id === selectedLinkId) || null
-  const connectedLinks = useMemo(() => selected ? links.filter(link => link.fromNodeId === selected.id || link.toNodeId === selected.id) : [], [links, selected])
+  const connectedLinks = useMemo(() => selected ? links.filter(link => scopedNodeIds.has(link.fromNodeId) && scopedNodeIds.has(link.toNodeId) && (link.fromNodeId === selected.id || link.toNodeId === selected.id)) : [], [links, scopedNodeIds, selected])
   const connectedIds = useMemo(() => new Set(connectedLinks.flatMap(link => [link.fromNodeId, link.toNodeId])), [connectedLinks])
   const query = nodeQuery.trim().toLocaleLowerCase()
-  const matchedNodes = useMemo(() => query ? nodes.filter(node => `${node.title} ${node.body} ${folderPath(folders, node.folderId).map(folder => folder.name).join(' ')}`.toLocaleLowerCase().includes(query)) : [], [folders, nodes, query])
+  const matchedNodes = useMemo(() => query ? nodes.filter(node => scopedNodeIds.has(node.id) && `${node.title} ${node.body} ${folderPath(scopedFolders, node.folderId).map(folder => folder.name).join(' ')}`.toLocaleLowerCase().includes(query)) : [], [nodes, query, scopedFolders, scopedNodeIds])
   const matchedIds = useMemo(() => new Set(matchedNodes.map(node => node.id)), [matchedNodes])
   const focusActive = Boolean(selectedId)
   const canUndoMap = undoHistory.at(-1)?.view === 'concept-map'
@@ -140,8 +162,8 @@ export function ConceptMap() {
     }
     return counts
   }, [folderNodes, ideaById, linkedIds])
-  const unpublishedInMap = useMemo(() => nodes.filter(node => node.kind === 'idea' && isUnpublishedIdea(node.sourceId ? ideaById.get(node.sourceId) : undefined)), [ideaById, nodes])
-  const groups = useMemo(() => opportunityGroups(nodes, links, node => node.kind === 'idea' && Boolean(node.sourceId && ideaById.get(node.sourceId)?.postId)), [ideaById, links, nodes])
+  const unpublishedInMap = useMemo(() => nodes.filter(node => scopedNodeIds.has(node.id) && node.kind === 'idea' && isUnpublishedIdea(node.sourceId ? ideaById.get(node.sourceId) : undefined)), [ideaById, nodes, scopedNodeIds])
+  const groups = useMemo(() => opportunityGroups(nodes.filter(node => scopedNodeIds.has(node.id)), links, node => node.kind === 'idea' && Boolean(node.sourceId && ideaById.get(node.sourceId)?.postId)), [ideaById, links, nodes, scopedNodeIds])
   const opportunityCount = groups.length + (unpublishedInMap.length ? 1 : 0)
 
   const sourceOf = (node: ConceptMapNode) => {
@@ -185,8 +207,6 @@ export function ConceptMap() {
   const reload = async () => {
     const map = await window.planner.conceptMap.list()
     setNodes(map.nodes); setLinks(map.links); setFolders(map.folders); setMapLoaded(true)
-    const savedFolder = loadActiveFolder()
-    if (savedFolder && !map.folders.some(folder => folder.id === savedFolder)) { setActiveFolderId(null); localStorage.removeItem(activeFolderKey) }
   }
   const clearSelection = () => { setSelectedId(null); setSelectedNodeIds([]); setSelectedLinkId(null); setLinkStartId(null); setEditingNode(false) }
   const centerOn = (node: ConceptMapNode) => {
@@ -196,7 +216,13 @@ export function ConceptMap() {
 
   useEffect(() => { runSafely(reload, 'No se pudo cargar el mapa conceptual') }, [])
   useEffect(() => { if (undoNotice?.startsWith('Deshecho y guardado:') || undoNotice?.startsWith('Rehecho y guardado:')) runSafely(reload, 'No se pudo actualizar el mapa') }, [undoNotice])
-  useEffect(() => { if (activeFolderId) localStorage.setItem(activeFolderKey, activeFolderId); else localStorage.removeItem(activeFolderKey) }, [activeFolderId])
+  useEffect(() => { localStorage.setItem(activeFoldersKey, JSON.stringify(activeFolders)) }, [activeFolders])
+  // Si el espacio activo cambió o la carpeta se eliminó, descartamos la carpeta recordada que ya no es visible.
+  useEffect(() => {
+    if (!mapLoaded) return
+    const saved = activeFolders[activeFolderScope]
+    if (saved && !scopedFolders.some(folder => folder.id === saved)) setActiveFolderId(null)
+  }, [activeFolderScope, activeFolders, mapLoaded, scopedFolders])
   useEffect(() => {
     if (!mapContext) return
     const dismiss = (event: globalThis.PointerEvent) => { if (!mapContextMenuRef.current?.contains(event.target as Node)) setMapContext(null) }
@@ -204,12 +230,14 @@ export function ConceptMap() {
     return () => window.removeEventListener('pointerdown', dismiss)
   }, [mapContext])
   useEffect(() => {
-    if (!pendingConceptMapPostId || !mapLoaded) return
-    const existing = nodes.find(node => node.kind === 'post' && node.sourceId === pendingConceptMapPostId)
-    if (existing) focusNode(existing)
-    else addPost(pendingConceptMapPostId)
+    if (!pendingConceptMapPostIds.length || !mapLoaded) return
+    const requested = pendingConceptMapPostIds
     clearConceptMapPostRequest()
-  }, [clearConceptMapPostRequest, mapLoaded, nodes, pendingConceptMapPostId])
+    const missing = requested.filter(id => !nodes.some(node => node.kind === 'post' && node.sourceId === id))
+    const existing = nodes.find(node => node.kind === 'post' && node.sourceId && requested.includes(node.sourceId))
+    if (missing.length) addPostsBatch(missing)
+    else if (existing) focusNode(existing)
+  }, [clearConceptMapPostRequest, mapLoaded, nodes, pendingConceptMapPostIds])
   useEffect(() => {
     if (selectedId && !nodes.some(node => node.id === selectedId)) clearSelection()
     if (selectedLinkId && !links.some(link => link.id === selectedLinkId)) setSelectedLinkId(null)
@@ -286,6 +314,23 @@ export function ConceptMap() {
   const addIdeaNode = (idea: { id: string; title: string; body: string }) => runSafely(() => addNode('idea', idea.id, idea.title || fallbackTitle('idea'), idea.body), 'No se pudo añadir la idea al mapa')
   const addIdea = (id: string) => { const idea = availableIdeas.find(item => item.id === id); if (idea) addIdeaNode(idea) }
   const addPost = (id: string) => { const post = availablePosts.find(item => item.id === id); if (post) runSafely(() => addNode('post', id, post.title || fallbackTitle('post'), post.caption), 'No se pudo añadir la publicación al mapa') }
+  /** Referencia varias publicaciones de una vez (tablero → mapa) con un solo paso de historial y posiciones sin solaparse. */
+  const addPostsBatch = (ids: string[]) => runSafely(async () => {
+    const before = { nodes, links }
+    let working = [...nodes]
+    const created: ConceptMapNode[] = []
+    for (const id of ids) {
+      const post = postById.get(id)
+      if (!post || working.some(node => node.kind === 'post' && node.sourceId === id)) continue
+      const saved = await window.planner.conceptMap.saveNode({ folderId: activeFolderId, kind: 'post', sourceId: id, title: (post.title || fallbackTitle('post')).trim(), body: post.caption.trim(), ...findFreeSlot(working.filter(node => node.folderId === activeFolderId)) })
+      working = [...working, saved]; created.push(saved)
+    }
+    if (!created.length) return
+    setNodes(current => [...current, ...created.filter(node => !current.some(item => item.id === node.id))])
+    recordConceptMapChange(before, { nodes: working, links }, created.length === 1 ? 'Añadir publicación' : `Añadir ${created.length} publicaciones`)
+    const last = created[created.length - 1]
+    setSelectedId(last.id); setSelectedLinkId(null); centerOn(last)
+  }, 'No se pudieron añadir las publicaciones al mapa')
   const moveNodeToFolder = (node: ConceptMapNode, folderId: string | null) => runSafely(async () => {
     if (node.folderId === folderId) { setMapContext(null); return }
     const before = { nodes, links }
@@ -300,7 +345,14 @@ export function ConceptMap() {
     runSafely(async () => { await addNode('resource', null, resourceTitle, resourceBody); setResourceTitle(''); setResourceBody(''); setResourceOpen(false) }, 'No se pudo crear el recurso')
   }
   const createIdea = () => runSafely(async () => { if (!ideaTitle.trim()) return; const idea = await saveIdea({ space: activeSpace || 'Mi contenido', title: ideaTitle.trim(), body: ideaBody.trim(), tags: [], media: [], status: 'inbox', priority: 'normal', dueDate: null }); await addNode('idea', idea.id, idea.title, idea.body); setIdeaTitle(''); setIdeaBody(''); setIdeaOpen(false) }, 'No se pudo crear la idea en el mapa')
-  const createFolder = () => runSafely(async () => { if (!folderName.trim()) return; const folder = await window.planner.conceptMap.saveFolder({ parentId: activeFolderId, name: folderName.trim() }); setFolders(current => [...current, folder]); setFolderName(''); setFolderOpen(false) }, 'No se pudo crear la carpeta')
+  const createFolder = () => runSafely(async () => {
+    if (!folderName.trim()) return
+    const parent = activeFolderId ? folders.find(folder => folder.id === activeFolderId) : null
+    const space = parent ? parent.space : activeSpace
+    const folder = await window.planner.conceptMap.saveFolder({ parentId: activeFolderId, space, name: folderName.trim() })
+    setFolders(current => [...current, folder]); setFolderName(''); setFolderOpen(false)
+  }, 'No se pudo crear la carpeta')
+  const folderScopeLabel = (activeFolderId ? folders.find(folder => folder.id === activeFolderId)?.space : activeSpace) || 'Global'
   const deleteActiveFolder = () => runSafely(async () => { if (!activeFolderId || !window.confirm('¿Eliminar esta carpeta? Sus nodos y subcarpetas subirán al nivel anterior.')) return; const result = await window.planner.conceptMap.removeFolder(activeFolderId); await reload(); setActiveFolderId(result.parentId) }, 'No se pudo eliminar la carpeta')
 
   const createLink = async (fromNodeId: string, toNodeId: string, linkRelation: ConceptRelation | null) => {
@@ -455,6 +507,7 @@ export function ConceptMap() {
   }, 'No se pudo restaurar el texto original')
 
   const focusNode = (node: ConceptMapNode, options: { record?: boolean } = {}) => {
+    if (node.folderId && !scopedFolders.some(folder => folder.id === node.folderId)) { setSelectionShortcutNotice('Ese elemento pertenece a otro espacio del mapa'); return }
     if (options.record !== false && selectedId && selectedId !== node.id) { const previous = selectedId; setHistory(current => [...current.slice(-29), previous]) }
     setSelectedLinkId(null)
     if (node.folderId !== activeFolderId) { setPendingFocusId(node.id); setActiveFolderId(node.folderId); return }
@@ -463,7 +516,8 @@ export function ConceptMap() {
   const goBack = () => {
     const stack = [...history]
     while (stack.length) {
-      const node = nodes.find(item => item.id === stack.pop())
+      const id = stack.pop()
+      const node = nodes.find(item => item.id === id && scopedNodeIds.has(item.id))
       if (node) { setHistory(stack); focusNode(node, { record: false }); return }
     }
     setHistory([])
@@ -487,8 +541,8 @@ export function ConceptMap() {
   }, 'No se pudo deshacer el orden')
 
   const exportView = () => {
-    const scopeName = path.length ? path.map(folder => folder.name).join(' / ') : 'Mapa completo'
-    const payload = buildExport(folders, nodes, links, activeFolderId, scopeName)
+    const scopeName = path.length ? path.map(folder => folder.name).join(' / ') : activeSpace ? `${activeSpace} · Mapa principal` : 'Mapa completo'
+    const payload = buildExport(scopedFolders, nodes, links, activeFolderId, scopeName)
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }))
     const anchor = document.createElement('a')
     anchor.href = url; anchor.download = `mapa-conceptual-${(path.at(-1)?.name || 'completo').replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}.json`
@@ -506,7 +560,7 @@ export function ConceptMap() {
     <div className="concept-map-history"><button type="button" className="map-action" disabled={!canUndoMap} title="Deshacer el último cambio en el mapa (Ctrl+Z)" onClick={() => runSafely(undoSavedChange, 'No se pudo deshacer el cambio del mapa')}><Undo2 size={15} /> Deshacer</button><button type="button" className="map-action" disabled={!canRedoMap} title="Rehacer el cambio del mapa (Ctrl+Shift+Z)" onClick={() => runSafely(redoSavedChange, 'No se pudo rehacer el cambio del mapa')}><Redo2 size={15} /> Rehacer</button></div>
     {showOpportunities && <div className="map-search-results map-opportunities" aria-label="Oportunidades editoriales"><strong>Oportunidades editoriales</strong>{unpublishedInMap.length > 0 && <button type="button" onClick={() => { setFilter('unpublished'); setShowOpportunities(false) }}><strong>{unpublishedInMap.length} idea(s) del mapa sin publicación</strong><small>resaltar</small></button>}{groups.map(group => <button type="button" key={group[0].id} onClick={() => focusNode(group[0])}><strong>{group.length} ideas conectadas sin publicación</strong><small>{group[0].title} y {group.length - 1} más · podrían ser una pieza</small></button>)}{!opportunityCount && <span>No hay oportunidades por ahora.</span>}</div>}
     {showPendingIdeas && <div className="map-search-results map-pending-ideas" aria-label="Ideas pendientes sin añadir al mapa"><strong>Ideas pendientes sin mapa</strong>{pendingIdeas.slice(0, 10).map(idea => <button type="button" key={idea.id} onClick={() => addIdeaNode(idea)}><strong>{idea.title || 'Idea sin título'}</strong><small>{idea.status === 'inbox' ? 'Bandeja' : 'En desarrollo'} · añadir</small></button>)}{pendingIdeas.length > 10 && <span>+{pendingIdeas.length - 10} ideas</span>}{!pendingIdeas.length && <span>No hay ideas pendientes sin añadir.</span>}</div>}
-    {query && <div className="map-search-results" role="listbox" aria-label="Resultados de búsqueda">{matchedNodes.slice(0, 8).map(node => <button type="button" key={node.id} onClick={() => focusNode(node)}><strong>{node.title}</strong><small>{kindLabels[node.kind]}{node.folderId ? ` · ${folderPath(folders, node.folderId).map(folder => folder.name).join(' / ')}` : ''}</small></button>)}{matchedNodes.length > 8 && <span>+{matchedNodes.length - 8} resultados</span>}{!matchedNodes.length && <span>Sin resultados en tus mapas y carpetas.</span>}</div>}
+    {query && <div className="map-search-results" role="listbox" aria-label="Resultados de búsqueda">{matchedNodes.slice(0, 8).map(node => <button type="button" key={node.id} onClick={() => focusNode(node)}><strong>{node.title}</strong><small>{kindLabels[node.kind]}{node.folderId ? ` · ${folderPath(scopedFolders, node.folderId).map(folder => folder.name).join(' / ')}` : ''}</small></button>)}{matchedNodes.length > 8 && <span>+{matchedNodes.length - 8} resultados</span>}{!matchedNodes.length && <span>Sin resultados en tus mapas y carpetas.</span>}</div>}
     <div className={'concept-map-viewport ' + (focusActive ? 'focus-active ' : '') + (linkStartId ? 'linking' : '')} ref={viewportRef} style={{ backgroundSize: `${20 * camera.zoom}px ${20 * camera.zoom}px`, backgroundPosition: `${-camera.x * camera.zoom}px ${-camera.y * camera.zoom}px` }} onContextMenu={event => { event.preventDefault(); setMapContext({ x: event.clientX, y: event.clientY }); setShowMoveFolders(false) }} onPointerDown={beginPan} onPointerMove={handlePointerMove} onPointerUp={finishPointer} onPointerCancel={finishPointer}>
       <svg className="concept-links" width={viewport.width} height={viewport.height}>
         <defs>{(['normal', 'emphasized', 'selected'] as const).map(state => <marker key={state} id={'concept-arrow-' + state} className={'arrow-' + state} markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" /></marker>)}</defs>
@@ -540,9 +594,9 @@ export function ConceptMap() {
       {selected.kind === 'post' && counterpart?.kind === 'idea' && <button type="button" className="map-action" onClick={() => { selectIdea(counterpart.id); setView('ideas') }}><ExternalLink size={15} /> Abrir idea relacionada</button>}
       {selected.kind === 'idea' && selected.sourceId && ideaById.has(selected.sourceId) && <><button type="button" className="map-action" onClick={() => { selectIdea(selected.sourceId); setView('ideas') }}><ExternalLink size={15} /> Ver idea</button>{counterpart?.kind === 'post' && <button type="button" className="map-action" onClick={() => { selectPost(counterpart.id); setView('board') }}><ExternalLink size={15} /> Abrir publicación relacionada</button>}<div className="concept-detail-links"><div className="concept-similar-heading"><strong>Ideas parecidas</strong><button type="button" className="map-action" disabled={loadingSimilar} onClick={findSimilarIdeas}>{loadingSimilar ? 'Buscando…' : 'Explorar'}</button></div>{similarIdeas.length ? similarIdeas.map(idea => { const existing = nodes.find(node => node.kind === 'idea' && node.sourceId === idea.id); const alreadyLinked = Boolean(existing && links.some(link => (link.fromNodeId === selected.id && link.toNodeId === existing.id) || (link.toNodeId === selected.id && link.fromNodeId === existing.id))); return <div className="concept-similar-row" key={idea.id}><button type="button" onClick={() => existing ? focusNode(existing) : addIdeaNode(idea)}><span>{idea.title || 'Idea sin título'}</span><small>{Math.round(idea.similarity * 100)}% · {existing ? 'ver en el mapa' : 'añadir al mapa'}</small></button>{!alreadyLinked && <button type="button" className="map-action" title="Crear una conexión «se relaciona con» (puedes cambiarla después)" onClick={() => void connectSimilar(idea)}><Link2 size={14} /> Conectar</button>}</div> }) : <span className="concept-detail-empty">Explora ideas del mismo espacio para descubrir conexiones.</span>}</div></>}
       {counterpart && !counterpartLinked && <div className="concept-detail-notice"><span>{counterpartNode ? `Hay ${counterpart.kind === 'post' ? 'una publicación' : 'una idea'} relacionada en el mapa sin conectar.` : `Tiene ${counterpart.kind === 'post' ? 'una publicación' : 'una idea'} relacionada que aún no está en el mapa.`}</span><button type="button" className="map-action" onClick={() => void connectCounterpart()}><Link2 size={14} /> {counterpartNode ? 'Conectar' : 'Añadir y conectar'}</button></div>}
-      <div className="concept-detail-links"><strong>Conexiones ({connectedLinks.length})</strong>{connectedLinks.length ? connectedLinks.map(link => { const outgoing = link.fromNodeId === selected.id; const other = nodes.find(node => node.id === (outgoing ? link.toNodeId : link.fromNodeId)); return other ? <button type="button" key={link.id} title={outgoing ? `«${selected.title}» ${relationLabel(link.relation)} «${other.title}»` : `«${other.title}» ${relationLabel(link.relation)} «${selected.title}»`} onClick={() => focusNode(other)}><span>{other.title}</span><small>{outgoing ? '→ saliente' : '← entrante'} · {relationLabel(link.relation)} · {kindLabels[other.kind]}{other.folderId !== activeFolderId ? ` · ${folderPath(folders, other.folderId).map(folder => folder.name).join(' / ') || 'Mapa'}` : ''}</small></button> : null }) : <span className="concept-detail-empty">Todavía no hay conexiones.</span>}</div></aside>}
+      <div className="concept-detail-links"><strong>Conexiones ({connectedLinks.length})</strong>{connectedLinks.length ? connectedLinks.map(link => { const outgoing = link.fromNodeId === selected.id; const other = nodes.find(node => node.id === (outgoing ? link.toNodeId : link.fromNodeId)); return other ? <button type="button" key={link.id} title={outgoing ? `«${selected.title}» ${relationLabel(link.relation)} «${other.title}»` : `«${other.title}» ${relationLabel(link.relation)} «${selected.title}»`} onClick={() => focusNode(other)}><span>{other.title}</span><small>{outgoing ? '→ saliente' : '← entrante'} · {relationLabel(link.relation)} · {kindLabels[other.kind]}{other.folderId !== activeFolderId ? ` · ${folderPath(scopedFolders, other.folderId).map(folder => folder.name).join(' / ') || 'Mapa'}` : ''}</small></button> : null }) : <span className="concept-detail-empty">Todavía no hay conexiones.</span>}</div></aside>}
     <div className="map-source-row"><select className="map-source-select" aria-label="Añadir idea al mapa" defaultValue="" onChange={event => { if (event.target.value) { addIdea(event.target.value); event.target.value = '' } }}><option value="">Añadir idea existente</option>{availableIdeas.filter(idea => !mappedIdeaIds.has(idea.id)).map(idea => <option key={idea.id} value={idea.id}>{idea.title || 'Idea sin título'}</option>)}</select><select className="map-source-select" aria-label="Añadir publicación al mapa" defaultValue="" onChange={event => { if (event.target.value) { addPost(event.target.value); event.target.value = '' } }}><option value="">Añadir publicación existente</option>{availablePosts.filter(post => !mappedPostIds.has(post.id)).map(post => <option key={post.id} value={post.id}>{post.title || 'Publicación sin título'}</option>)}</select><span className="map-shortcuts" title="Atajos de teclado">Esc deseleccionar · / buscar · C conectar · E editar · F encuadrar · +/- zoom · Alt+← anterior</span></div>
-    {folderOpen && <div className="space-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setFolderOpen(false) }}><form className="space-dialog resource-dialog" onSubmit={event => { event.preventDefault(); void createFolder() }}><header><div><span>NUEVA CARPETA</span><h2>{activeFolderId ? 'Subcarpeta del mapa' : 'Carpeta del mapa'}</h2></div><button type="button" className="icon-button" onClick={() => setFolderOpen(false)}><X size={18} /></button></header><label>Nombre<input autoFocus value={folderName} maxLength={120} onChange={event => setFolderName(event.target.value)} placeholder="Ej. Investigación de campaña" /></label><footer><button type="button" className="ghost-button" onClick={() => setFolderOpen(false)}>Cancelar</button><button className="save-button" disabled={!folderName.trim()}>Crear carpeta</button></footer></form></div>}
+    {folderOpen && <div className="space-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setFolderOpen(false) }}><form className="space-dialog resource-dialog" onSubmit={event => { event.preventDefault(); void createFolder() }}><header><div><span>NUEVA CARPETA</span><h2>{activeFolderId ? 'Subcarpeta del mapa' : 'Carpeta del mapa'}</h2></div><button type="button" className="icon-button" onClick={() => setFolderOpen(false)}><X size={18} /></button></header><label>Nombre<input autoFocus value={folderName} maxLength={120} onChange={event => setFolderName(event.target.value)} placeholder="Ej. Investigación de campaña" /></label><p className="map-dialog-scope">Ámbito: <strong>{folderScopeLabel}</strong>{activeFolderId ? ' · dentro de la carpeta actual' : ''}</p><footer><button type="button" className="ghost-button" onClick={() => setFolderOpen(false)}>Cancelar</button><button className="save-button" disabled={!folderName.trim()}>Crear carpeta</button></footer></form></div>}
     {ideaOpen && <div className="space-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setIdeaOpen(false) }}><form className="space-dialog resource-dialog" onSubmit={event => { event.preventDefault(); void createIdea() }}><header><div><span>NUEVA IDEA</span><h2>Idea para el mapa</h2></div><button type="button" className="icon-button" onClick={() => setIdeaOpen(false)}><X size={18} /></button></header><label>Título<input autoFocus value={ideaTitle} maxLength={240} onChange={event => setIdeaTitle(event.target.value)} placeholder="Ej. Primer argumento del reel" /></label><label>Desarrollo<textarea value={ideaBody} maxLength={20_000} onChange={event => setIdeaBody(event.target.value)} placeholder="Anota el enfoque o datos importantes" /></label><footer><button type="button" className="ghost-button" onClick={() => setIdeaOpen(false)}>Cancelar</button><button className="save-button" disabled={!ideaTitle.trim()}>Crear idea</button></footer></form></div>}
     {resourceOpen && <div className="space-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setResourceOpen(false) }}><form className="space-dialog resource-dialog" onSubmit={event => { event.preventDefault(); addResource() }}><header><div><span>RECURSO GENERAL</span><h2>Nuevo elemento de contexto</h2></div><button type="button" className="icon-button" onClick={() => setResourceOpen(false)}><X size={18} /></button></header><label>Título<input autoFocus value={resourceTitle} maxLength={240} onChange={event => setResourceTitle(event.target.value)} placeholder="Ej. Guía de tono de marca" /></label><label>Notas<textarea value={resourceBody} maxLength={20_000} onChange={event => setResourceBody(event.target.value)} placeholder="Enlace, contexto o recordatorio" /></label><footer><button type="button" className="ghost-button" onClick={() => setResourceOpen(false)}>Cancelar</button><button className="save-button" disabled={!resourceTitle.trim()}>Añadir al mapa</button></footer></form></div>}
     {postPickerOpen && <div className="space-dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setPostPickerOpen(false) }}><div className="space-dialog resource-dialog map-post-picker"><header><div><span>AÑADIR REFERENCIA</span><h2>Publicación existente</h2></div><button type="button" className="icon-button" onClick={() => setPostPickerOpen(false)}><X size={18} /></button></header><label>Buscar<input autoFocus value={postPickerQuery} onChange={event => setPostPickerQuery(event.target.value)} placeholder="Título o texto de la publicación" /></label><div className="map-post-picker-list">{postsToReference.map(post => <button type="button" key={post.id} onClick={() => { addPost(post.id); setPostPickerOpen(false); setPostPickerQuery('') }}><strong>{post.title || 'Publicación sin título'}</strong><small>{post.project}{post.scheduledAt ? ` · ${formatDate(post.scheduledAt)}` : ''}</small></button>)}{!postsToReference.length && <span>{availablePosts.length ? 'No hay coincidencias o ya están referenciadas.' : 'No hay publicaciones disponibles para este espacio.'}</span>}</div></div></div>}
@@ -552,7 +606,7 @@ export function ConceptMap() {
         <button type="button" role="menuitem" onClick={() => { setSelectedId(node.id); setSelectedNodeIds([node.id]); setSelectedLinkId(null); setLinkStartId(node.id); setMapContext(null) }}><Link2 size={14} />Conectar desde aquí</button>
         {node.kind === 'post' && node.sourceId && postById.has(node.sourceId) && <button type="button" role="menuitem" onClick={() => { selectPost(node.sourceId); setView('board'); setMapContext(null) }}><ExternalLink size={14} />Abrir publicación</button>}
         <button type="button" role="menuitem" aria-expanded={showMoveFolders} onClick={() => setShowMoveFolders(value => !value)}><Folder size={14} />Mover a carpeta…</button>
-        {showMoveFolders && <div className="concept-map-context-submenu" role="group" aria-label="Mover a carpeta">{node.folderId !== null && <button type="button" role="menuitem" onClick={() => moveNodeToFolder(node, null)}>Mapa principal</button>}{folders.filter(folder => folder.id !== node.folderId).map(folder => <button type="button" role="menuitem" key={folder.id} onClick={() => moveNodeToFolder(node, folder.id)}>{folderPath(folders, folder.id).map(item => item.name).join(' / ')}</button>)}</div>}
+        {showMoveFolders && <div className="concept-map-context-submenu" role="group" aria-label="Mover a carpeta">{node.folderId !== null && <button type="button" role="menuitem" onClick={() => moveNodeToFolder(node, null)}>Mapa principal</button>}{scopedFolders.filter(folder => folder.id !== node.folderId).map(folder => <button type="button" role="menuitem" key={folder.id} onClick={() => moveNodeToFolder(node, folder.id)}>{folderPath(scopedFolders, folder.id).map(item => item.name).join(' / ')}</button>)}</div>}
         <button type="button" role="menuitem" className="danger-menu-item" onClick={() => void removeNodeFromMap(node)}><Trash2 size={14} />Quitar del mapa</button>
       </>})()}
       {mapContext.linkId && <><button type="button" role="menuitem" onClick={() => { selectLink(mapContext.linkId!); setMapContext(null) }}><Pencil size={14} />Modificar conexión</button><button type="button" role="menuitem" className="danger-menu-item" onClick={() => { void removeLink(mapContext.linkId!); setMapContext(null) }}><Trash2 size={14} />Eliminar conexión</button></>}

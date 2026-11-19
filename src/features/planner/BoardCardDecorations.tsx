@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Smartphone } from 'lucide-react'
+import { CalendarClock, Smartphone } from 'lucide-react'
 import { postColors } from '../../shared/postColors'
+import { formatElapsedSince, formatMarkedAt, interestLevelLabels, interestLevelNames, type PostInterestLevel } from '../../shared/post-marks'
 import type { Post } from '../../shared/types'
+import './post-marks.css'
 
 export type BoardCardDetailLevel = 'hidden' | 'discreet' | 'full'
 export type MobilePublicationProgress = { destinations: number; awaitingConfirmation: number; used: number; retirementPending: number }
@@ -60,6 +62,54 @@ export function MobileCardStatus({ state, postId, detailLevel }: { state: Mobile
   return <span className={`board-mobile-state ${kind}`} title={title}><Smartphone size={11} /> {label}</span>
 }
 
+type MobileStateKind = 'retirement-pending' | 'awaiting' | 'current' | 'previous' | 'never'
+
+function mobileKindForPost(state: MobilePublicationState, postId: string): MobileStateKind {
+  if (state.currentPostIds.includes(postId)) {
+    const progress = state.progressByPostId[postId]
+    if (progress?.retirementPending) return 'retirement-pending'
+    if (progress?.awaitingConfirmation) return 'awaiting'
+    return 'current'
+  }
+  return state.previouslyExportedPostIds.includes(postId) ? 'previous' : 'never'
+}
+
+const mobileKindPriority: MobileStateKind[] = ['retirement-pending', 'awaiting', 'current', 'previous']
+
+/**
+ * Indicador agregado del catálogo móvil para una pila: resume el estado de todos sus
+ * miembros en un solo teléfono (con la cantidad cuando hay más de uno) y deja el
+ * desglose en el tooltip. Así la pila no queda ciega a la integración móvil.
+ */
+export function MobileStackStatus({ state, postIds, detailLevel }: { state: MobilePublicationState | null; postIds: string[]; detailLevel: BoardCardDetailLevel }) {
+  if (detailLevel === 'hidden') return null
+  if (!state || !state.configured) {
+    if (detailLevel === 'discreet') return null
+    return <span className="board-mobile-state unknown"><Smartphone size={11} /> {state ? 'Sin configurar' : 'Consultando'}</span>
+  }
+  const counts = new Map<MobileStateKind, number>()
+  for (const postId of postIds) {
+    const kind = mobileKindForPost(state, postId)
+    if (kind !== 'never') counts.set(kind, (counts.get(kind) ?? 0) + 1)
+  }
+  const total = [...counts.values()].reduce((sum, count) => sum + count, 0)
+  if (!total) return null
+  const kind = mobileKindPriority.find(candidate => counts.has(candidate)) ?? 'current'
+  const label = total === 1 ? '1 publicación en la app móvil' : `${total} publicaciones en la app móvil`
+  const parts: string[] = []
+  const pending = counts.get('retirement-pending') ?? 0
+  const awaiting = counts.get('awaiting') ?? 0
+  const current = counts.get('current') ?? 0
+  const previous = counts.get('previous') ?? 0
+  if (pending) parts.push(`${pending} con retiro pendiente`)
+  if (awaiting) parts.push(`${awaiting} esperando confirmación`)
+  if (current) parts.push(`${current} con uso confirmado`)
+  if (previous) parts.push(`${previous} exportada${previous === 1 ? '' : 's'} antes`)
+  const title = `${label}. ${parts.join(', ')}.`
+  if (detailLevel === 'full') return <span className={`board-mobile-state ${kind}`} title={title}><Smartphone size={11} /> {label}</span>
+  return <span className={`board-mobile-state ${kind} discreet board-mobile-stack`} title={title} aria-label={title}><Smartphone size={11} />{total > 1 && <b>{total}</b>}</span>
+}
+
 export function BoardCardColorPicker({ post, onColor }: { post: Post; onColor(color: string): void }) {
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
@@ -99,5 +149,32 @@ export function BoardCardColorPicker({ post, onColor }: { post: Post; onColor(co
       {postColors.map(color => <button type="button" key={color.value} aria-label={color.label} title={color.label} aria-pressed={post.color === color.value} style={{ backgroundColor: color.value }} onClick={() => { onColor(color.value); setOpen(false) }} />)}
       <button type="button" className="board-card-color-reset" aria-label="Usar color predeterminado" title="Color predeterminado" aria-pressed={post.color === defaultColor} onClick={() => { onColor(defaultColor); close() }}>Predeterminado</button>
     </div>, document.body)}
+  </div>
+}
+
+// Un solo temporizador para todas las insignias del tablero, no uno por tarjeta.
+const clockListeners = new Set<() => void>()
+let clockTimer: number | undefined
+function subscribeClock(listener: () => void) {
+  clockListeners.add(listener)
+  if (clockTimer === undefined) clockTimer = window.setInterval(() => { for (const notify of clockListeners) notify() }, 60_000)
+  return () => {
+    clockListeners.delete(listener)
+    if (!clockListeners.size && clockTimer !== undefined) { window.clearInterval(clockTimer); clockTimer = undefined }
+  }
+}
+function useNow() {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => subscribeClock(() => setNow(Date.now())), [])
+  return now
+}
+
+/** Insignias personales de la tarjeta: tiempo desde la fecha registrada y destacado. */
+export function PostMarkBadges({ dateMark, interestLevel }: { dateMark?: string; interestLevel?: PostInterestLevel }) {
+  const now = useNow()
+  if (!dateMark && !interestLevel) return null
+  return <div className="board-card-marks">
+    {dateMark && <span className="board-date-mark" title={formatMarkedAt(dateMark, now)}><CalendarClock size={11} /><span>{formatElapsedSince(dateMark, now)}</span></span>}
+    {interestLevel && <span className={`board-interest-mark level-${interestLevel}`} title={`Destacado: ${interestLevelLabels[interestLevel]} · ${interestLevelNames[interestLevel]}`}>{interestLevelLabels[interestLevel]}</span>}
   </div>
 }

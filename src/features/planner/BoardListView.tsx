@@ -99,7 +99,7 @@ export function BoardListView({
           <td><span className="board-list-stage"><i style={{ background: statusMeta[post.status].color }} />{statusMeta[post.status].label}</span></td>
           <td>{contentLabels[post.contentType]}</td>
           <td>{memberships.length ? memberships.map(group => group.name).join(', ') : '—'}</td>
-          <td>{post.scheduledAt ? format(parseISO(post.scheduledAt), 'd MMM yyyy · HH:mm', { locale: es }) : 'Sin fecha'}</td>
+          <td>{post.scheduledAt ? format(parseISO(post.scheduledAt), 'd MMM yyyy · HH:mm', { locale: es }) : '—'}</td>
           <td>{post.distribution?.length ? post.distribution.map(target => target.name).join(', ') : post.platforms.join(', ') || '—'}</td>
         </tr>
       })}</tbody></table></div>

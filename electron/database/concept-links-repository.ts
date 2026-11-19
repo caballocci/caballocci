@@ -63,11 +63,21 @@ export class ConceptLinksRepository {
     const now = new Date().toISOString()
     const id = String(input.id || crypto.randomUUID())
     const current = firstRow(this.db, `SELECT * FROM concept_map_folders WHERE id = '${id.replaceAll("'", "''")}'`)
+    const parentId = input.parentId ? String(input.parentId) : null
+    const space = input.space == null || input.space === '' ? null : String(input.space)
+    if (parentId) {
+      const parent = this.folder(parentId)
+      if (!parent) throw new Error('No se encontró la carpeta padre del mapa')
+      // Una carpeta de espacio puede colgar de una global, pero una global no puede colgar de una de espacio.
+      if (parent.space != null && parent.space !== space) throw new Error('La carpeta debe pertenecer al mismo espacio que su carpeta padre')
+      if (parentId === id) throw new Error('La carpeta no puede ser su propia carpeta padre')
+    }
     this.db.run(`INSERT OR REPLACE INTO concept_map_folders
-      (id,parent_id,name,created_at,updated_at)
-      VALUES ($id,$parentId,$name,$createdAt,$updatedAt)`, {
+      (id,parent_id,space,name,created_at,updated_at)
+      VALUES ($id,$parentId,$space,$name,$createdAt,$updatedAt)`, {
       $id: id,
-      $parentId: input.parentId ? String(input.parentId) : null,
+      $parentId: parentId,
+      $space: space,
       $name: String(input.name),
       $createdAt: current?.created_at ? String(current.created_at) : now,
       $updatedAt: now,

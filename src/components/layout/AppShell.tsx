@@ -8,6 +8,7 @@ import { childrenByParent, isDescendant, subtreePostIds } from '../../shared/wor
 import { useWorkGroupOrder } from '../../features/planner/useWorkGroupOrder'
 import { useWorkGroupNesting, applyCollectionDropClasses, clearCollectionDropClasses, collectionDropZone, type CollectionDropZone } from '../../features/planner/useWorkGroupNesting'
 import { BoardContextMenu } from '../../features/planner/BoardContextMenu'
+import { NoteReminder } from './NoteReminder'
 import './app-shell.css'
 
 export function PlatformMark({ platform, small = false }: { platform: Platform; small?: boolean }) {
@@ -16,13 +17,14 @@ export function PlatformMark({ platform, small = false }: { platform: Platform; 
 }
 
 export function Sidebar() {
-  const { view, setView, posts, ideas, workGroups, activeWorkGroupId, setActiveWorkGroup, setWorkGroupArchived, activeSpace, customSpaces, hiddenSpaces, spaceNotes, spaceKey, saveSpaceNotes, setActiveSpace, addSpace, renameSpace, removeSpace, movePostsToSpace } = usePlanner()
+  const { view, setView, posts, ideas, workGroups, activeWorkGroupId, setActiveWorkGroup, setWorkGroupArchived, activeSpace, customSpaces, hiddenSpaces, spaceNotes, spaceKey, saveSpaceNotes, setActiveSpace, addSpace, renameSpace, removeSpace, movePostsToSpace, requestConceptMapPosts } = usePlanner()
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const [creatingSpace, setCreatingSpace] = useState(false)
   const [editingSpace, setEditingSpace] = useState<string | null>(null)
   const [removingSpace, setRemovingSpace] = useState<string | null>(null)
   const [spaceName, setSpaceName] = useState('')
   const [draggingOverSpace, setDraggingOverSpace] = useState<string | null>(null)
+  const [draggingOverMap, setDraggingOverMap] = useState(false)
   const [showCollectionDate, setShowCollectionDate] = useState(() => { try { return localStorage.getItem('caballocci.collection-label-date') === 'true' } catch { return false } })
   const [collectionMenu, setCollectionMenu] = useState<{ group: WorkGroup; x: number; y: number } | null>(null)
   const [draggingCollectionId, setDraggingCollectionId] = useState<string | null>(null)
@@ -126,6 +128,32 @@ export function Sidebar() {
       }, 'No se pudieron mover las publicaciones al espacio')
     },
   })
+  /** Soltar tarjetas sobre “Mapa conceptual” crea referencias en la carpeta activa del mapa, sin sacarlas del tablero. */
+  const mapDropProps = {
+    onDragOver: (event: DragEvent<HTMLButtonElement>) => {
+      if (!Array.from(event.dataTransfer.types).includes('application/x-caballocci-post-ids')) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      setDraggingOverMap(true)
+    },
+    onDragLeave: (event: DragEvent<HTMLButtonElement>) => {
+      if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDraggingOverMap(false)
+    },
+    onDrop: (event: DragEvent<HTMLButtonElement>) => {
+      if (!Array.from(event.dataTransfer.types).includes('application/x-caballocci-post-ids')) return
+      event.preventDefault()
+      event.stopPropagation()
+      setDraggingOverMap(false)
+      let ids: string[] = []
+      try { ids = JSON.parse(event.dataTransfer.getData('application/x-caballocci-post-ids')) as string[] } catch {
+        const id = event.dataTransfer.getData('text/plain')
+        if (id) ids = [id]
+      }
+      const visibleIds = new Set(posts.filter(post => !activeSpace || post.project === activeSpace).map(post => post.id))
+      const references = ids.filter(id => visibleIds.has(id))
+      if (references.length) requestConceptMapPosts(references)
+    },
+  }
   const renderCollectionNode = (group: WorkGroup, depth: number): React.ReactNode => {
     const children = workGroupChildren.get(group.id) ?? []
     const isOpen = !collapsedGroups.has(group.id)
@@ -156,7 +184,7 @@ export function Sidebar() {
   ] as const
   return <aside className="sidebar">
     <div className="brand"><div className="brand-symbol"><span /><span /><span /></div><div><strong>caballo</strong><b>cci</b></div></div>
-    <nav>{nav.map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => setView(id)}><Icon size={18} /><span>{label}</span>{id === 'timeline' && <em>{posts.filter(p => p.status === 'scheduled' && (!activeSpace || p.project === activeSpace)).length}</em>}{id === 'ideas' && <em>{ideas.filter(idea => idea.status !== 'archived' && (!activeSpace || idea.space === activeSpace)).length}</em>}</button>)}</nav>
+    <nav>{nav.map(({ id, label, icon: Icon }) => <button key={id} className={(view === id ? 'active' : '') + (id === 'concept-map' && draggingOverMap ? ' map-drop-target' : '')} title={id === 'concept-map' ? 'Soltá publicaciones para referenciarlas en el mapa' : undefined} onClick={() => setView(id)} {...(id === 'concept-map' ? mapDropProps : {})}><Icon size={18} /><span>{label}</span>{id === 'timeline' && <em>{posts.filter(p => p.status === 'scheduled' && (!activeSpace || p.project === activeSpace)).length}</em>}{id === 'ideas' && <em>{ideas.filter(idea => idea.status !== 'archived' && (!activeSpace || idea.space === activeSpace)).length}</em>}</button>)}</nav>
     <div className="side-section"><p>ESPACIOS</p><button className={'space ' + (activeSpace === null ? 'active' : '')} onClick={() => { setActiveSpace(null); setActiveWorkGroup(null) }}><span className="space-dot coral">C</span><span>Todos los contenidos</span></button>{spaces.map((space, index) => <div className={'space-row' + (draggingOverSpace === space ? ' space-drop-target' : '')} key={space} {...spaceDropProps(space)}><button className={'space ' + (activeSpace === space ? 'active' : '')} onClick={() => { setActiveWorkGroup(null); setActiveSpace(space) }}><span className={'space-dot ' + (index % 2 ? 'coral' : 'mint')}>{space.slice(0, 1).toUpperCase()}</span><span>{space}</span></button><button className="space-menu-button" aria-label={'Opciones de ' + space} aria-expanded={menuOpen === space} onClick={() => setMenuOpen(menuOpen === space ? null : space)}><MoreHorizontal size={16} /></button>{menuOpen === space && <div className="space-menu"><button onClick={() => { setEditingSpace(space); setSpaceName(space); setMenuOpen(null) }}><Pencil size={14} /> Renombrar</button><button className="danger-menu-item" onClick={() => { setRemovingSpace(space); setMenuOpen(null) }}><Trash2 size={14} /> Quitar espacio</button></div>}</div>)}<button className="add-space" onClick={() => { setCreatingSpace(true); setSpaceName('') }}><Plus size={15} /> Nuevo espacio</button>{activeSpace && <div className="space-context"><div className="space-context-heading"><strong>{activeSpace}</strong><button className="icon-button" title="Abrir carpeta del espacio" onClick={() => void runWithErrorReporting(() => window.planner.system.openSpaceFolder(activeSpace), 'No se pudo abrir la carpeta del espacio')}><FolderOpen size={15} /></button></div><div className="space-context-stats"><span><b>{posts.filter(post => post.project === activeSpace).length}</b> publicaciones</span><span><b>{ideas.filter(idea => idea.space === activeSpace).length}</b> ideas</span></div><label><span>NOTAS DEL ESPACIO</span><textarea value={spaceNotes[spaceKey(activeSpace)] || ''} onChange={event => saveSpaceNotes(activeSpace, event.target.value)} placeholder="Objetivo, tono, enlaces, decisiones y contexto..." /></label><small className="space-folder-hint">La carpeta del espacio contiene las carpetas de sus publicaciones.</small></div>}<div className="side-collections"><p>COLECCIONES</p>{(workGroupChildren.get(null) ?? []).map(group => renderCollectionNode(group, 0))}{draggingCollection?.parentId != null && <button type="button" className="side-collection-root-drop" onDragOver={event => { event.preventDefault(); event.currentTarget.classList.add('drag-over') }} onDragLeave={event => event.currentTarget.classList.remove('drag-over')} onDrop={event => { event.preventDefault(); event.currentTarget.classList.remove('drag-over'); const draggedId = event.dataTransfer.getData('application/x-caballocci-work-group-id'); if (draggedId) nestWorkGroup(draggedId, null); setDraggingCollectionId(null) }}><CornerUpLeft size={13} /> Soltar para mover al nivel superior</button>}</div></div>
     {collectionMenu && <BoardContextMenu x={collectionMenu.x} y={collectionMenu.y} label={`Opciones de ${collectionMenu.group.name}`}>
       <button type="button" role="menuitem" onClick={() => { setCollectionMenu(null); openCollection(collectionMenu.group) }}><Pencil size={14} />Gestionar en tablero</button>
@@ -213,7 +241,7 @@ export function Topbar({ onNew, onSearchSubmit }: { onNew: () => void; onSearchS
       : update?.status === 'downloaded'
         ? 'Actualización lista'
         : 'Descarga fallida · Reintentar'
-  return <header className="topbar"><div className="search"><Search size={17} /><input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={event => { if (event.key === 'Enter') onSearchSubmit?.() }} placeholder="Buscar publicaciones, ideas, etiquetas..." /><kbd>Ctrl K</kbd></div><div className="top-actions">{updateIndicator && <button className={`update-indicator ${update?.status}`} title="Ver actualizaciones" onClick={() => setView('about')}><Download size={14} /><span>{updateLabel}</span>{update?.status === 'downloading' && <progress max="100" value={update.percent || 0} />}</button>}<div className="app-menu-wrap"><button className="icon-button" title="Abrir menú" aria-expanded={open} onClick={() => setOpen(value => !value)}><Menu size={18} /></button>{open && <div className="app-menu"><button onClick={() => go('timeline')}><Clock3 size={15} /> Línea de tiempo</button><button onClick={() => go('calendar')}><CalendarDays size={15} /> Calendario</button><button onClick={() => go('board')}><Columns3 size={15} /> Tablero</button><button onClick={() => go('ideas')}><Lightbulb size={15} /> Ideas</button><button onClick={() => go('library')}><Library size={15} /> Biblioteca</button><hr />{canUndoHere && <button onClick={() => void runWithErrorReporting(async () => { await undoSavedChange(); setOpen(false) }, 'No se pudo deshacer el cambio guardado')}><Undo2 size={15} /> Deshacer (Ctrl+Z)</button>}{canRedoHere && <button onClick={() => void runWithErrorReporting(async () => { await redoSavedChange(); setOpen(false) }, 'No se pudo rehacer el cambio guardado')}><Redo2 size={15} /> Rehacer (Ctrl+Shift+Z)</button>}<button onClick={() => go('about')}><Settings size={15} /> Acerca de y actualizaciones</button></div>}</div><button className="new-button" onClick={onNew}><Plus size={17} /> Nueva publicación</button><div className="avatar">CG</div></div></header>
+  return <header className="topbar"><div className="search"><Search size={17} /><input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={event => { if (event.key === 'Enter') onSearchSubmit?.() }} placeholder="Buscar publicaciones, ideas, etiquetas..." /><kbd>Ctrl K</kbd></div><div className="top-actions">{updateIndicator && <button className={`update-indicator ${update?.status}`} title="Ver actualizaciones" onClick={() => setView('about')}><Download size={14} /><span>{updateLabel}</span>{update?.status === 'downloading' && <progress max="100" value={update.percent || 0} />}</button>}<div className="app-menu-wrap"><button className="icon-button" title="Abrir menú" aria-expanded={open} onClick={() => setOpen(value => !value)}><Menu size={18} /></button>{open && <div className="app-menu"><button onClick={() => go('timeline')}><Clock3 size={15} /> Línea de tiempo</button><button onClick={() => go('calendar')}><CalendarDays size={15} /> Calendario</button><button onClick={() => go('board')}><Columns3 size={15} /> Tablero</button><button onClick={() => go('ideas')}><Lightbulb size={15} /> Ideas</button><button onClick={() => go('library')}><Library size={15} /> Biblioteca</button><hr />{canUndoHere && <button onClick={() => void runWithErrorReporting(async () => { await undoSavedChange(); setOpen(false) }, 'No se pudo deshacer el cambio guardado')}><Undo2 size={15} /> Deshacer (Ctrl+Z)</button>}{canRedoHere && <button onClick={() => void runWithErrorReporting(async () => { await redoSavedChange(); setOpen(false) }, 'No se pudo rehacer el cambio guardado')}><Redo2 size={15} /> Rehacer (Ctrl+Shift+Z)</button>}<button onClick={() => go('about')}><Settings size={15} /> Acerca de y actualizaciones</button></div>}</div><NoteReminder /><button className="new-button" onClick={onNew}><Plus size={17} /> Nueva publicación</button><div className="avatar">CG</div></div></header>
 }
 
 export function ViewHeading({ title, subtitle, children }: { title: string; subtitle: string; children?: React.ReactNode }) {

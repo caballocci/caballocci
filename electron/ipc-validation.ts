@@ -386,8 +386,10 @@ export function validateConceptNodeInput(value: unknown): Record<string, unknown
 export function validateConceptFolderInput(value: unknown): Record<string, unknown> {
   const folder = record(value, 'conceptMap.folder')
   const parentId = folder.parentId === null || folder.parentId === undefined || folder.parentId === '' ? null : text(folder.parentId, 'conceptMap.folder.parentId', 128, false)
+  const space = folder.space === null || folder.space === undefined || folder.space === '' ? null : text(folder.space, 'conceptMap.folder.space', 120, false)
   const validated: Record<string, unknown> = {
     parentId,
+    space,
     name: text(folder.name, 'conceptMap.folder.name', 120, false),
   }
   const id = optionalId(folder.id, 'conceptMap.folder.id')
