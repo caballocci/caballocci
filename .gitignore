@@ -7,7 +7,6 @@ release/
 *.exe
 .DS_Store
 ignore.md
-security.md
 
 testo/
 
