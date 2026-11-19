@@ -204,6 +204,8 @@ export interface ConceptMapLink {
 export interface ConceptMapFolder {
   id: string
   parentId: string | null
+  /** null = carpeta global; si no, nombre del espacio al que pertenece. */
+  space: string | null
   name: string
   createdAt: string
   updatedAt: string

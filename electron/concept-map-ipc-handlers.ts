@@ -16,7 +16,7 @@ function mapConceptNode(row: Record<string, unknown>) {
 }
 
 function mapConceptFolder(row: Record<string, unknown>) {
-  return { id: row.id, parentId: row.parent_id || null, name: row.name, createdAt: row.created_at, updatedAt: row.updated_at }
+  return { id: row.id, parentId: row.parent_id || null, space: row.space == null ? null : String(row.space), name: row.name, createdAt: row.created_at, updatedAt: row.updated_at }
 }
 
 function mapConceptLink(row: Record<string, unknown>) {

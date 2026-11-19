@@ -27,7 +27,7 @@ test('post stacks round-trip through migration v34 and PostsRepository', async t
   assert.ok(columns.includes('stack_id'), 'posts.stack_id exists after migrations')
   assert.ok(columns.includes('stack_position'), 'posts.stack_position exists after migrations')
   const userVersion = Number(db.exec('PRAGMA user_version')[0].values[0][0])
-  assert.equal(userVersion, 34)
+  assert.ok(userVersion >= 34, 'post stack migration is applied')
 
   const repository = new PostsRepository(db, () => {}, () => {})
   const noIdea = () => undefined

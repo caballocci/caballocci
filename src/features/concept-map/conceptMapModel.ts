@@ -1,5 +1,5 @@
 import type { ConceptMapFolder, ConceptMapLink, ConceptMapNode, ConceptNodeKind, ConceptRelation, Idea } from '../../shared/types'
-import { formatLocalDate } from '../../shared/date'
+import { formatLocalDate } from '../../shared/date.ts'
 
 export const nodeSize = { width: 220, height: 116 }
 
@@ -110,15 +110,29 @@ export function descendantFolderIds(folders: ConceptMapFolder[], rootId: string 
   return ids
 }
 
+/** Carpetas visibles en un espacio: globales y propias; sin espacio activo se muestran todas. */
+export function foldersInScope(folders: ConceptMapFolder[], activeSpace: string | null) {
+  return activeSpace ? folders.filter(folder => folder.space === null || folder.space === activeSpace) : folders
+}
+
+/** Nodos alcanzables desde el ámbito actual: los de la raíz global y los de sus carpetas visibles. */
+export function nodeIdsInScope(folders: ConceptMapFolder[], nodes: ConceptMapNode[]) {
+  const folderIds = new Set(folders.map(folder => folder.id))
+  return new Set(nodes.filter(node => node.folderId === null || folderIds.has(node.folderId!)).map(node => node.id))
+}
+
 /** Self-contained snapshot of a folder (and its subfolders) with the connections between its nodes. */
 export function buildExport(folders: ConceptMapFolder[], nodes: ConceptMapNode[], links: ConceptMapLink[], rootId: string | null, scopeName: string) {
-  const folderIds = descendantFolderIds(folders, rootId)
+  // Al exportar una carpeta de espacio se excluyen las carpetas de otros espacios, aunque cuelguen de una global común.
+  const root = rootId ? folders.find(folder => folder.id === rootId) : undefined
+  const exportFolders = root?.space ? folders.filter(folder => folder.space === null || folder.space === root.space) : folders
+  const folderIds = descendantFolderIds(exportFolders, rootId)
   const inScope = (folderId: string | null) => folderId === null ? rootId === null : folderIds.has(folderId)
   const exportNodes = nodes.filter(node => inScope(node.folderId))
   const nodeIds = new Set(exportNodes.map(node => node.id))
   return {
     format: 'caballocci-concept-map', version: 1, exportedAt: new Date().toISOString(), scope: scopeName,
-    folders: folders.filter(folder => folderIds.has(folder.id)),
+    folders: exportFolders.filter(folder => folderIds.has(folder.id)),
     nodes: exportNodes,
     links: links.filter(link => nodeIds.has(link.fromNodeId) && nodeIds.has(link.toNodeId)).map(link => ({ ...link, relationLabel: relationLabel(link.relation) })),
   }

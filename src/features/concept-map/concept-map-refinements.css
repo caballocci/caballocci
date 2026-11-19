@@ -41,3 +41,5 @@
 .map-selection-hint { align-self: center; color: #818b84; font-size: 9px; }
 .concept-selection-box { position: absolute; z-index: 5; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); pointer-events: none; }
 .concept-node:focus-visible, .map-action:focus-visible, .map-icon-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.map-dialog-scope { margin: 12px 0 0; color: #8e9a91; font-size: 10px; }
+.map-dialog-scope strong { color: #d0a64b; font-weight: 700; }
