@@ -147,14 +147,15 @@
 .board-stack-slot.stack-drop-target .board-card { border-color: #d0a64b; background: #26241a; box-shadow: inset 0 0 0 1px #d0a64b, 0 0 0 2px #d0a64b44; }
 .board-stack-slot.stack-drop-target .board-card::after { position: absolute; right: 6px; bottom: 6px; z-index: 6; padding: 3px 9px; border-radius: 9px; background: #d0a64b; color: #17130a; font: 700 10px 'Segoe UI', sans-serif; content: 'Apilar'; }
 .board-stack-chip { display: inline-flex; flex: none; align-items: center; gap: 2px; height: 20px; padding: 0 6px; border-radius: 4px; background: #232b25; color: #d7c07c; font: 700 9px 'DM Mono', monospace; }
-.board-stack-expanded { display: grid; gap: 4px; padding: 6px; border: 1px solid #333d36; border-left: 2px solid #d0a64b; border-radius: 6px; background: #131815; }
-.board-stack-expanded-header { display: flex; align-items: center; gap: 6px; padding: 0 2px 6px; border-bottom: 1px solid #252e28; color: #d7c07c; }
-.board-stack-expanded-header strong { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
-.board-stack-expanded-header small { margin-right: auto; color: #77837a; font-size: 9px; }
-.board-stack-collapse { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid #333d36; border-radius: 4px; background: transparent; color: #aab5ad; cursor: pointer; }
-.board-stack-collapse:hover { background: #1c231e; color: #edf3ee; }
+.board-stack-expanded { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; width: 100%; margin: 0; padding: 6px; border: 1px solid #333d36; border-left: 2px solid #d0a64b; border-radius: 6px; background: #131815; min-width: 0; }
+.board-card-slot.board-stack-slot.expanded { min-width: 0; height: auto; }
+.board-stack-expanded-header { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px 6px; border-bottom: 1px solid #252e28; color: #d7c07c; }
+.board-stack-expanded-header strong { flex: none; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.board-stack-expanded-header small { min-width: 0; margin-right: auto; overflow: hidden; color: #77837a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.board-stack-collapse { display: grid; flex: none; width: 26px; height: 26px; place-items: center; border: 1px solid #3a463d; border-radius: 4px; background: #1c231e; color: #cfd6cf; cursor: pointer; }
+.board-stack-collapse:hover { background: #222a24; color: #edf3ee; border-color: #525f55; }
 .board-stack-collapse:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
-.board-stack-member { display: flex; align-items: center; gap: 7px; padding: 7px 8px; border: 1px solid #232b25; border-radius: 5px; background: #161c18; cursor: grab; }
+.board-stack-member { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 7px 8px; border: 1px solid #232b25; border-radius: 5px; background: #161c18; cursor: grab; }
 .board-stack-member:hover { border-color: #38443b; background: #1a211c; }
 .board-stack-member:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
 .board-stack-member.selected { border-color: #d0a64b; box-shadow: inset 0 0 0 1px #d0a64b; }
@@ -162,7 +163,8 @@
 .board-stack-member.reorder-over-top { box-shadow: 0 -2px 0 #d0a64b; }
 .board-stack-member.reorder-over-bottom { box-shadow: 0 2px 0 #d0a64b; }
 .board-stack-member.stack-drop-target { border-color: #d0a64b; background: #221f18; }
-.board-stack-member .board-select-hit { position: static; flex: none; width: 18px; height: 18px; opacity: 1; pointer-events: auto; }
+.board-stack-member .board-select-hit { position: static; flex: none; width: 18px; height: 18px; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.board-stack-member:hover .board-select-hit, .board-stack-member:focus-within .board-select-hit { opacity: 1; pointer-events: auto; }
 .board-stack-member .board-stack-member-unstack { display: grid; flex: none; width: 22px; height: 22px; place-items: center; border: 1px solid #2d3730; border-radius: 4px; background: transparent; color: #8d988f; cursor: pointer; }
 .board-stack-member .board-stack-member-unstack:hover { border-color: #5a3a35; background: #2a1e1b; color: #e99a8d; }
 .board-stack-member .board-stack-member-unstack:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
