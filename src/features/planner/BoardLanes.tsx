@@ -552,7 +552,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
         onFormat={contentType => { close(); onFormat(actionIds, contentType) }}
       />
       <button type="button" role="menuitem" onClick={() => { onSelect(context.post.id); close() }}>{actionIds.length > 1 ? 'Editar esta publicación' : 'Abrir / editar publicación'}</button>
-      <button type="button" role="menuitem" onClick={() => { usePlanner.getState().requestConceptMapPost(context.post.id); close() }}><Network size={14} />Referenciar en mapa conceptual</button>
+      <button type="button" role="menuitem" onClick={() => { usePlanner.getState().requestConceptMapPosts(actionIds); close() }}><Network size={14} />Referenciar en mapa conceptual{actionIds.length > 1 ? ` (${actionIds.length})` : ''}</button>
       {actionIds.length > 1 && <button type="button" role="menuitem" onClick={() => { onEditSelection(); close() }}>Editar selección en pestañas</button>}
       <button type="button" role="menuitem" onClick={() => { void duplicatePost(context.post); close() }}><Copy size={14} />Duplicar publicación</button>
       <button type="button" role="menuitem" onClick={() => { void runWithErrorReporting(() => window.planner.media.openFolder(context.post.id, context.post.project), 'No se pudo abrir la carpeta de media'); close() }}><FolderOpen size={14} />Abrir en el Explorador Windows</button>

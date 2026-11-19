@@ -40,7 +40,7 @@ function isTyping(target: EventTarget | null) {
 }
 
 export function ConceptMap() {
-  const { posts, ideas, activeSpace, pendingConceptMapPostId, clearConceptMapPostRequest, undoHistory, redoHistory, undoNotice, undoSavedChange, redoSavedChange, recordConceptMapChange, saveIdea, save: savePost, ideaNeighbors, select: selectPost, selectIdea, setView } = usePlanner()
+  const { posts, ideas, activeSpace, pendingConceptMapPostIds, clearConceptMapPostRequest, undoHistory, redoHistory, undoNotice, undoSavedChange, redoSavedChange, recordConceptMapChange, saveIdea, save: savePost, ideaNeighbors, select: selectPost, selectIdea, setView } = usePlanner()
   const [nodes, setNodes] = useState<ConceptMapNode[]>([])
   const [mapLoaded, setMapLoaded] = useState(false)
   const [links, setLinks] = useState<ConceptMapLink[]>([])
@@ -204,12 +204,14 @@ export function ConceptMap() {
     return () => window.removeEventListener('pointerdown', dismiss)
   }, [mapContext])
   useEffect(() => {
-    if (!pendingConceptMapPostId || !mapLoaded) return
-    const existing = nodes.find(node => node.kind === 'post' && node.sourceId === pendingConceptMapPostId)
-    if (existing) focusNode(existing)
-    else addPost(pendingConceptMapPostId)
+    if (!pendingConceptMapPostIds.length || !mapLoaded) return
+    const requested = pendingConceptMapPostIds
     clearConceptMapPostRequest()
-  }, [clearConceptMapPostRequest, mapLoaded, nodes, pendingConceptMapPostId])
+    const missing = requested.filter(id => !nodes.some(node => node.kind === 'post' && node.sourceId === id))
+    const existing = nodes.find(node => node.kind === 'post' && node.sourceId && requested.includes(node.sourceId))
+    if (missing.length) addPostsBatch(missing)
+    else if (existing) focusNode(existing)
+  }, [clearConceptMapPostRequest, mapLoaded, nodes, pendingConceptMapPostIds])
   useEffect(() => {
     if (selectedId && !nodes.some(node => node.id === selectedId)) clearSelection()
     if (selectedLinkId && !links.some(link => link.id === selectedLinkId)) setSelectedLinkId(null)
@@ -286,6 +288,23 @@ export function ConceptMap() {
   const addIdeaNode = (idea: { id: string; title: string; body: string }) => runSafely(() => addNode('idea', idea.id, idea.title || fallbackTitle('idea'), idea.body), 'No se pudo añadir la idea al mapa')
   const addIdea = (id: string) => { const idea = availableIdeas.find(item => item.id === id); if (idea) addIdeaNode(idea) }
   const addPost = (id: string) => { const post = availablePosts.find(item => item.id === id); if (post) runSafely(() => addNode('post', id, post.title || fallbackTitle('post'), post.caption), 'No se pudo añadir la publicación al mapa') }
+  /** Referencia varias publicaciones de una vez (tablero → mapa) con un solo paso de historial y posiciones sin solaparse. */
+  const addPostsBatch = (ids: string[]) => runSafely(async () => {
+    const before = { nodes, links }
+    let working = [...nodes]
+    const created: ConceptMapNode[] = []
+    for (const id of ids) {
+      const post = postById.get(id)
+      if (!post || working.some(node => node.kind === 'post' && node.sourceId === id)) continue
+      const saved = await window.planner.conceptMap.saveNode({ folderId: activeFolderId, kind: 'post', sourceId: id, title: (post.title || fallbackTitle('post')).trim(), body: post.caption.trim(), ...findFreeSlot(working.filter(node => node.folderId === activeFolderId)) })
+      working = [...working, saved]; created.push(saved)
+    }
+    if (!created.length) return
+    setNodes(current => [...current, ...created.filter(node => !current.some(item => item.id === node.id))])
+    recordConceptMapChange(before, { nodes: working, links }, created.length === 1 ? 'Añadir publicación' : `Añadir ${created.length} publicaciones`)
+    const last = created[created.length - 1]
+    setSelectedId(last.id); setSelectedLinkId(null); centerOn(last)
+  }, 'No se pudieron añadir las publicaciones al mapa')
   const moveNodeToFolder = (node: ConceptMapNode, folderId: string | null) => runSafely(async () => {
     if (node.folderId === folderId) { setMapContext(null); return }
     const before = { nodes, links }

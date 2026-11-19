@@ -48,7 +48,7 @@ interface PlannerState {
   view: PlannerView
   selectedId: string | null
   selectedIdeaId: string | null
-  pendingConceptMapPostId: string | null
+  pendingConceptMapPostIds: string[]
   query: string
   activeSpace: string | null
   customSpaces: string[]
@@ -86,6 +86,8 @@ interface PlannerState {
   select(id: string | null): void
   selectIdea(id: string | null): void
   requestConceptMapPost(id: string): void
+  /** Pide al mapa conceptual referenciar varias publicaciones (sin moverlas del tablero). */
+  requestConceptMapPosts(ids: string[]): void
   clearConceptMapPostRequest(): void
   setQuery(query: string): void
   setActiveSpace(space: string | null): void
@@ -209,7 +211,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   view: 'timeline',
   selectedId: null,
   selectedIdeaId: null,
-  pendingConceptMapPostId: null,
+  pendingConceptMapPostIds: [],
   query: '',
   activeSpace: null,
   customSpaces: readStoredSpaces(),
@@ -619,8 +621,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   setView: (view) => set({ view }),
   select: (selectedId) => set({ selectedId }),
   selectIdea: (selectedIdeaId) => set({ selectedIdeaId }),
-  requestConceptMapPost: (id) => set({ pendingConceptMapPostId: id, view: 'concept-map' }),
-  clearConceptMapPostRequest: () => set({ pendingConceptMapPostId: null }),
+  requestConceptMapPost: (id) => set({ pendingConceptMapPostIds: [id], view: 'concept-map' }),
+  requestConceptMapPosts: (ids) => { const unique = [...new Set(ids)]; if (unique.length) set({ pendingConceptMapPostIds: unique, view: 'concept-map' }) },
+  clearConceptMapPostRequest: () => set({ pendingConceptMapPostIds: [] }),
   setQuery: (query) => set({ query }),
   setActiveSpace: (activeSpace) => set({ activeSpace, activeWorkGroupId: null, selectedId: null, selectedIdeaId: null }),
   setActiveWorkGroup: (activeWorkGroupId) => {
