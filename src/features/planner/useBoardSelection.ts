@@ -13,10 +13,10 @@ type UseBoardSelectionOptions = {
   selectedWorkGroupId: string | null
   listFilterKey: string
   setListPage(page: number): void
-  move(id: string, status: Post['status']): Promise<unknown>
+  moveWithStacks(ids: string[], status: Post['status'], options?: { groupLabel?: string }): Promise<unknown>
 }
 
-export function useBoardSelection({ allPosts, query, activeSpace, selectedWorkGroupId, listFilterKey, setListPage, move }: UseBoardSelectionOptions) {
+export function useBoardSelection({ allPosts, query, activeSpace, selectedWorkGroupId, listFilterKey, setListPage, moveWithStacks }: UseBoardSelectionOptions) {
   const { selected, toggle, clear, set: setSelected } = useSelection()
   const [bulkScheduleAt, setBulkScheduleAt] = useState('')
   const [bulkScheduleWarning, setBulkScheduleWarning] = useState('')
@@ -58,8 +58,7 @@ export function useBoardSelection({ allPosts, query, activeSpace, selectedWorkGr
 
   const bulkMove = (status: Post['status'], postIds: string[] = [...selected]) => runWithErrorReporting(async () => {
     const targets = postIds.filter(id => allPosts.some(item => item.id === id && item.status !== status))
-    for (const id of targets) await move(id, status)
-    if (targets.length) usePlanner.getState().groupRecentUndoActions(targets.length, `Mover ${targets.length} publicaciones a ${statusMeta[status].label}`)
+    if (targets.length) await moveWithStacks(targets, status, { groupLabel: `Mover ${targets.length} publicaciones a ${statusMeta[status].label}` })
     clear()
   }, 'No se pudieron actualizar las publicaciones seleccionadas')
 

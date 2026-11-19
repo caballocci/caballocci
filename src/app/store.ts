@@ -54,13 +54,17 @@ interface PlannerState {
   customSpaces: string[]
   hiddenSpaces: string[]
   load(): Promise<void>
-  save(post: PostInput, options?: { recordHistory?: boolean }): Promise<Post>
+  save(post: PostInput, options?: { recordHistory?: boolean; keepStack?: boolean }): Promise<Post>
+  stackPosts(targetId: string, ids: string[], options?: { recordHistory?: boolean }): Promise<void>
+  unstackPost(id: string, options?: { recordHistory?: boolean }): Promise<void>
+  reorderStack(stackId: string, orderedIds: string[], options?: { recordHistory?: boolean }): Promise<void>
+  moveWithStacks(ids: string[], status: PostStatus, options?: { groupLabel?: string; recordHistory?: boolean }): Promise<void>
   saveWorkGroup(group: WorkGroupInput, options?: { recordHistory?: boolean }): Promise<WorkGroup>
   setWorkGroupPosts(id: string, postIds: string[], options?: { recordHistory?: boolean }): Promise<WorkGroup>
   setWorkGroupArchived(id: string, archived: boolean, options?: { recordHistory?: boolean }): Promise<WorkGroup>
   removeWorkGroup(id: string, options?: { recordHistory?: boolean }): Promise<void>
   remove(id: string, options?: { recordHistory?: boolean }): Promise<void>
-  move(id: string, status: PostStatus): Promise<void>
+  move(id: string, status: PostStatus, options?: { recordHistory?: boolean; keepStack?: boolean }): Promise<void>
   movePostsToSpace(postIds: string[], space: string): Promise<number>
   saveIdea(idea: IdeaInput, options?: { recordHistory?: boolean }): Promise<Idea>
   saveIdeasMany(ideas: IdeaInput[]): Promise<{ created: Idea[]; skipped: number; duplicates: Array<{ title: string; sourceName: string; existingId: string; existingTitle: string; existingSourceName: string }> }>
@@ -152,6 +156,19 @@ function pushUndo(history: WorkspaceUndoAction[], action: WorkspaceUndoAction) {
   return [...history.slice(-99), action]
 }
 
+/** Renumera los miembros de una pila a 0..n-1; si queda uno solo, lo desapila. */
+async function renumberStackMembers(get: () => PlannerState, stackId: string) {
+  const members = get().posts.filter(item => item.stackId === stackId).sort((a, b) => (a.stackPosition ?? 0) - (b.stackPosition ?? 0))
+  for (let index = 0; index < members.length; index += 1) {
+    const member = members[index]
+    if (members.length === 1) {
+      if (member.stackId !== null || member.stackPosition !== null) await get().save({ ...member, stackId: null, stackPosition: null })
+      continue
+    }
+    if (member.stackPosition !== index) await get().save({ ...member, stackPosition: index })
+  }
+}
+
 async function applyConceptMapSnapshot(snapshot: ConceptMapSnapshot) {
   const current = await window.planner.conceptMap.list()
   const nodeIds = new Set(snapshot.nodeIds)
@@ -235,7 +252,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const sourceView = get().view
     const before = get().posts.find(item => item.id === post.id) || null
     const historyStart = get().undoHistory.length
-    const saved = await window.planner.posts.save(post)
+    const statusChanged = Boolean(before && (before.status !== post.status || before.project !== post.project))
+    const stackExit = Boolean(statusChanged && before?.stackId && !options?.keepStack)
+    const saved = await window.planner.posts.save(stackExit ? { ...post, stackId: null, stackPosition: null } : post)
     set(state => {
       const changed = JSON.stringify(before) !== JSON.stringify(saved)
       return {
@@ -250,8 +269,12 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       for (const group of groups) {
         await get().setWorkGroupPosts(group.id, group.postIds.filter(id => id !== saved.id), { recordHistory: options?.recordHistory === false ? false : undefined })
       }
-      const actionCount = get().undoHistory.length - historyStart
-      if (options?.recordHistory !== false && actionCount > 1) get().groupRecentUndoActions(actionCount, 'Mover publicación a otro espacio')
+    }
+    if (stackExit && before?.stackId) await renumberStackMembers(get, before.stackId)
+    const actionCount = get().undoHistory.length - historyStart
+    if (options?.recordHistory !== false && actionCount > 1) {
+      if (stackExit) get().groupRecentUndoActions(actionCount, 'Mover publicación fuera de la pila')
+      else if (before && before.project !== saved.project) get().groupRecentUndoActions(actionCount, 'Mover publicación a otro espacio')
     }
     return saved
   },
@@ -353,9 +376,85 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       }
     })
   },
-  move: async (id, status) => {
+  move: async (id, status, options) => {
     const post = get().posts.find((item) => item.id === id)
-    if (post) await get().save({ ...post, status })
+    if (post) await get().save({ ...post, status }, options)
+  },
+  stackPosts: async (targetId, ids, options) => {
+    const start = get().undoHistory.length
+    const target = get().posts.find(item => item.id === targetId)
+    if (!target) return
+    const stackId = target.stackId ?? crypto.randomUUID()
+    const dragged = [...new Set(ids)]
+      .map(id => get().posts.find(item => item.id === id))
+      .filter((item): item is Post => Boolean(item) && item!.id !== targetId)
+    if (!dragged.length) return
+    const inTargetStack = new Set(target.stackId ? get().posts.filter(item => item.stackId === stackId).map(item => item.id) : [targetId])
+    const newMembers = dragged.filter(item => !inTargetStack.has(item.id))
+    if (!newMembers.length) return
+    const sourceStacks = new Set(newMembers.map(item => item.stackId).filter((id): id is string => Boolean(id)))
+    const existing = target.stackId
+      ? get().posts.filter(item => item.stackId === stackId).sort((a, b) => (a.stackPosition ?? 0) - (b.stackPosition ?? 0)).map(item => item.id)
+      : [targetId]
+    const sequence = [...existing, ...newMembers.map(item => item.id)]
+    for (let index = 0; index < sequence.length; index += 1) {
+      const member = get().posts.find(item => item.id === sequence[index])
+      if (!member) continue
+      if (member.stackId === stackId && member.stackPosition === index) continue
+      await get().save({ ...member, stackId, stackPosition: index }, options)
+    }
+    for (const otherStack of sourceStacks) if (otherStack !== stackId) await renumberStackMembers(get, otherStack)
+    const count = get().undoHistory.length - start
+    if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, 'Apilar publicaciones')
+  },
+  unstackPost: async (id, options) => {
+    const post = get().posts.find(item => item.id === id)
+    if (!post?.stackId) return
+    const stackId = post.stackId
+    const start = get().undoHistory.length
+    await get().save({ ...post, stackId: null, stackPosition: null }, options)
+    await renumberStackMembers(get, stackId)
+    const count = get().undoHistory.length - start
+    if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, 'Desapilar publicación')
+  },
+  reorderStack: async (stackId, orderedIds, options) => {
+    const start = get().undoHistory.length
+    const members = get().posts.filter(item => item.stackId === stackId)
+    if (members.length < 2) return
+    const ordered = [...new Set(orderedIds.filter(id => members.some(member => member.id === id)))]
+    const rest = members.filter(member => !ordered.includes(member.id)).sort((a, b) => (a.stackPosition ?? 0) - (b.stackPosition ?? 0)).map(item => item.id)
+    const sequence = [...ordered, ...rest]
+    for (let index = 0; index < sequence.length; index += 1) {
+      const member = get().posts.find(item => item.id === sequence[index])
+      if (member && member.stackPosition !== index) await get().save({ ...member, stackPosition: index }, options)
+    }
+    const count = get().undoHistory.length - start
+    if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, 'Reordenar pila')
+  },
+  moveWithStacks: async (ids, status, options) => {
+    const start = get().undoHistory.length
+    const unique = [...new Set(ids)]
+    const posts = get().posts
+    const membersOf = new Map<string, string[]>()
+    for (const post of posts) if (post.stackId) membersOf.set(post.stackId, [...(membersOf.get(post.stackId) || []), post.id])
+    const preserved = new Set<string>()
+    for (const id of unique) {
+      const post = posts.find(item => item.id === id)
+      if (post?.stackId) {
+        const members = membersOf.get(post.stackId) || []
+        if (members.length > 1 && members.every(member => unique.includes(member))) preserved.add(id)
+      }
+    }
+    for (const id of unique) {
+      if (preserved.has(id)) {
+        const post = get().posts.find(item => item.id === id)
+        if (post) await get().save({ ...post, status }, { keepStack: true })
+      } else {
+        await get().move(id, status)
+      }
+    }
+    const count = get().undoHistory.length - start
+    if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, options?.groupLabel ?? (preserved.size ? 'Mover pila a otra columna' : `Mover ${count} ${count === 1 ? 'publicación' : 'publicaciones'}`))
   },
   saveIdea: async (idea, options) => {
     const sourceView = get().view

@@ -28,7 +28,7 @@ import { AreaSelectionSurface } from './AreaSelectionSurface'
 
 
 export function Board({ onEditSelection, onPickPost, pickMode = false, pickedPostIds = new Set<string>() }: { onEditSelection(ids: string[]): void; onPickPost?(id: string): boolean; pickMode?: boolean; pickedPostIds?: Set<string> }) {
-  const { posts: allPosts, workGroups, move, movePostsToSpace, customSpaces, select, save, saveWorkGroup, remove, activeSpace, activeWorkGroupId: selectedWorkGroupId, setActiveWorkGroup, query, setQuery, groupRecentUndoActions } = usePlanner()
+  const { posts: allPosts, workGroups, moveWithStacks, movePostsToSpace, customSpaces, select, save, saveWorkGroup, remove, activeSpace, activeWorkGroupId: selectedWorkGroupId, setActiveWorkGroup, query, setQuery, groupRecentUndoActions } = usePlanner()
   const [visiblePerColumn, setVisiblePerColumn] = useState(30)
   const [boardMode, setBoardMode] = useState<'kanban' | 'list' | 'calendar'>(() => {
     try { return (localStorage.getItem('caballocci.board-view.all') as 'kanban' | 'list' | 'calendar') || 'kanban' } catch { return 'kanban' }
@@ -48,7 +48,7 @@ export function Board({ onEditSelection, onPickPost, pickMode = false, pickedPos
   const [listSortDirection, setListSortDirection] = useState<'asc' | 'desc'>('asc')
   const [listPage, setListPage] = useState(0)
   useEffect(() => { setListGroup(''); setListPage(0) }, [activeSpace, selectedWorkGroupId])
-  const boardSelection = useBoardSelection({ allPosts, query, activeSpace, selectedWorkGroupId, listFilterKey: [listStatus, listFormat, listGroup, listFrom, listTo].join('|'), setListPage, move })
+  const boardSelection = useBoardSelection({ allPosts, query, activeSpace, selectedWorkGroupId, listFilterKey: [listStatus, listFormat, listGroup, listFrom, listTo].join('|'), setListPage, moveWithStacks })
   const {
     selected, toggle, clear, toggleStatusSelection,
     bulkScheduleAt, setBulkScheduleAt, bulkScheduleWarning, setBulkScheduleWarning,
@@ -222,7 +222,7 @@ export function Board({ onEditSelection, onPickPost, pickMode = false, pickedPos
     scheduledAt.setHours(hours || 0, minutes || 0, 0, 0)
     void runWithErrorReporting(() => usePlanner.getState().save({ ...post, scheduledAt: scheduledAt.toISOString(), status: 'scheduled' }), 'No se pudo programar la publicación')
   }
-  const moveDragged = (status: Post['status']) => runWithErrorReporting(async () => { const ids = dragIds.current; dragIds.current = []; const changed = ids.filter(id => allPosts.some(post => post.id === id && post.status !== status)); for (const id of changed) await move(id, status); if (changed.length) clear() }, 'No se pudieron mover las publicaciones')
+  const moveDragged = (status: Post['status']) => runWithErrorReporting(async () => { const ids = dragIds.current; dragIds.current = []; const changed = ids.filter(id => allPosts.some(post => post.id === id && post.status !== status)); if (changed.length) { await moveWithStacks(changed, status); clear() } }, 'No se pudieron mover las publicaciones')
   const dropPostsInCollection = (groupId: string, ids: string[]) => {
     const group = scopedWorkGroups.find(item => item.id === groupId && !item.archivedAt)
     const postIds = ids.filter(id => {
