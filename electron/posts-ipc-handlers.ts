@@ -30,8 +30,9 @@ export function registerPostsIpcHandlers({ database, dataDirectory, handle, with
     return database.remove(id)
   })
   handle('posts:reassign-project', args => {
-    validateArgumentCount(args, 2)
-    return database.reassignProject(validateProject(args[0], 'fromProject'), validateProject(args[1], 'toProject'))
+    if (args.length < 2 || args.length > 3) throw new TypeError('Argumento IPC no valido: posts.reassignProject')
+    const keepStacks = args[2] === undefined ? false : typeof args[2] === 'boolean' ? args[2] : (() => { throw new TypeError('Argumento IPC no valido: keepStacks') })()
+    return database.reassignProject(validateProject(args[0], 'fromProject'), validateProject(args[1], 'toProject'), { keepStacks })
   })
   handle('posts:uncombine', args => {
     validateArgumentCount(args, 1)

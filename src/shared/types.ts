@@ -28,6 +28,9 @@ export interface Post {
   sourceIdeaId: string | null
   isCombined?: boolean
   combinedIdeaIds?: string[]
+  /** null cuando no está en una pila; apunta a la pila de la publicación en el tablero. */
+  stackId: string | null
+  stackPosition: number | null
   createdAt: string
   updatedAt: string
 }
@@ -175,7 +178,7 @@ export interface IdeaAnalysisProgress { stage: 'loading-model' | 'embeddings' | 
 
 export type IdeaInput = Omit<Idea, 'id' | 'createdAt' | 'updatedAt' | 'postId' | 'combinedPostId' | 'combinedPostIds'> & { id?: string; postId?: string | null; combinedPostId?: string | null; combinedPostIds?: string[] }
 
-export type PostInput = Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'media' | 'ideaBlocks' | 'sourceIdeaId'> & { id?: string; media?: MediaAsset[]; ideaBlocks?: IdeaBlock[]; sourceIdeaId?: string | null }
+export type PostInput = Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'media' | 'ideaBlocks' | 'sourceIdeaId' | 'stackId' | 'stackPosition'> & { id?: string; media?: MediaAsset[]; ideaBlocks?: IdeaBlock[]; sourceIdeaId?: string | null; stackId?: string | null; stackPosition?: number | null }
 
 export interface ConceptMapNode {
   id: string
@@ -370,7 +373,7 @@ export interface ElectronAPI {
     list(): Promise<Post[]>
     save(post: PostInput): Promise<Post>
     remove(id: string): Promise<void>
-    reassignProject(fromProject: string, toProject: string): Promise<void>
+    reassignProject(fromProject: string, toProject: string, options?: { keepStacks?: boolean }): Promise<void>
     uncombine(id: string): Promise<{ ideas: Idea[]; post: Post }>
   }
   workGroups: {

@@ -739,6 +739,8 @@ function mapPost(row: Record<string, unknown>) {
     media: mapMediaAssets(row.media), ideaBlocks: mapIdeaBlocks(row.idea_blocks), sourceIdeaId: row.source_idea_id || null,
     isCombined: Number(row.combined_idea_count || 0) > 0,
     combinedIdeaIds: parseJsonStringArray(row.combined_idea_ids),
+    stackId: row.stack_id ? String(row.stack_id) : null,
+    stackPosition: row.stack_position == null ? null : Number(row.stack_position),
     createdAt: row.created_at, updatedAt: row.updated_at,
   }
 }

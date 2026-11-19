@@ -102,6 +102,13 @@ export function validatePostInput(value: unknown): Record<string, unknown> {
 
   const distribution = post.distribution === undefined ? [] : post.distribution
   if (!Array.isArray(distribution) || distribution.length > 100) invalid('post.distribution')
+  const stackId = post.stackId === undefined ? undefined : post.stackId === null ? null : text(post.stackId, 'post.stackId', 64, false)
+  const stackPosition = post.stackPosition === undefined ? undefined : post.stackPosition === null ? null : (() => {
+    const value = post.stackPosition
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 9999) invalid('post.stackPosition')
+    return value
+  })()
+
   const validated: Record<string, unknown> = {
     title: text(post.title, 'post.title', 300),
     caption: text(post.caption, 'post.caption', 100_000),
@@ -120,6 +127,8 @@ export function validatePostInput(value: unknown): Record<string, unknown> {
     media: media.map(mediaAsset),
     ideaBlocks: ideaBlocks.map(ideaBlock),
   }
+  if (stackId !== undefined) validated.stackId = stackId
+  if (stackPosition !== undefined) validated.stackPosition = stackPosition
   const id = optionalId(post.id, 'post.id')
   if (id) validated.id = id
   return validated

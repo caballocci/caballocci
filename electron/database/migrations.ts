@@ -409,4 +409,13 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS work_groups_parent_idx ON work_groups(parent_id, archived_at);
     `,
   },
+  {
+    version: 34,
+    name: 'post_stacks',
+    up: `
+      ALTER TABLE posts ADD COLUMN stack_id TEXT NULL;
+      ALTER TABLE posts ADD COLUMN stack_position INTEGER NULL;
+      CREATE INDEX IF NOT EXISTS posts_stack_idx ON posts(stack_id);
+    `,
+  },
 ]

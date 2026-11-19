@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('planner', {
     list: () => ipcRenderer.invoke('posts:list'),
     save: (post: unknown) => ipcRenderer.invoke('posts:save', post),
     remove: (id: string) => ipcRenderer.invoke('posts:remove', id),
-    reassignProject: (fromProject: string, toProject: string) => ipcRenderer.invoke('posts:reassign-project', fromProject, toProject),
+    reassignProject: (fromProject: string, toProject: string, options?: { keepStacks?: boolean }) => ipcRenderer.invoke('posts:reassign-project', fromProject, toProject, options?.keepStacks),
     uncombine: (id: string) => ipcRenderer.invoke('posts:uncombine', id),
   },
   workGroups: {

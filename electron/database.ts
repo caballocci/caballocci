@@ -236,8 +236,8 @@ export class PlannerDatabase {
     this.posts.remove(id)
   }
 
-  reassignProject(fromProject: string, toProject: string) {
-    this.posts.reassignProject(fromProject, toProject)
+  reassignProject(fromProject: string, toProject: string, options?: { keepStacks?: boolean }) {
+    this.posts.reassignProject(fromProject, toProject, options)
   }
 
   listIdeas(): Row[] {

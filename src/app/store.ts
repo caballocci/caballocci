@@ -546,7 +546,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   renameSpace: async (space, nextName) => {
     const name = nextName.trim()
     if (!name || name === space) return
-    await window.planner.posts.reassignProject(space, name)
+    await window.planner.posts.reassignProject(space, name, { keepStacks: true })
     for (const group of get().workGroups.filter(item => item.space === space)) {
       await get().saveWorkGroup({ id: group.id, name: group.name, description: group.description, space: name }, { recordHistory: false })
     }
@@ -575,12 +575,12 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   },
   removeSpace: async (space, movePosts) => {
     if (movePosts) {
-      await window.planner.posts.reassignProject(space, 'Mi contenido')
+      await window.planner.posts.reassignProject(space, 'Mi contenido', { keepStacks: false })
       for (const group of get().workGroups.filter(item => item.space === space)) {
         await get().saveWorkGroup({ id: group.id, name: group.name, description: group.description, space: '' }, { recordHistory: false })
       }
       set({
-        posts: get().posts.map(post => post.project === space ? { ...post, project: 'Mi contenido' } : post),
+        posts: get().posts.map(post => post.project === space ? { ...post, project: 'Mi contenido', stackId: null, stackPosition: null } : post),
         ideas: get().ideas.map(idea => idea.space === space ? { ...idea, space: 'Mi contenido' } : idea),
       })
     }
