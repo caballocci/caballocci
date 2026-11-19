@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { Smartphone } from 'lucide-react'
+import { Layers, Smartphone } from 'lucide-react'
 import type { MediaAsset, Post, WorkGroup } from '../../shared/types'
 import { EditorMediaPicker } from '../editor/EditorMediaPicker'
 import { childrenByParent } from '../../shared/work-group-tree'
@@ -26,9 +26,10 @@ type BoardBulkActionsProps = {
   spaces: string[]
   moveToSpace(space: string): Promise<unknown>
   bulkScheduleWarning: string
+  onStackSelection(): void
 }
 
-export function BoardBulkActions({ selected, selectedPosts, onAttachMedia, workGroups, selectedWorkGroup, membershipTargetGroupId, setMembershipTargetGroupId, updateGroupMembership, openGroupForm, clear, boardMode, mobileExportBusy, exportSelectedToMobile, bulkScheduleAt, setBulkScheduleAt, setBulkScheduleWarning, bulkSchedule, bulkMove, bulkScheduleWarning, spaces, moveToSpace }: BoardBulkActionsProps) {
+export function BoardBulkActions({ selected, selectedPosts, onAttachMedia, workGroups, selectedWorkGroup, membershipTargetGroupId, setMembershipTargetGroupId, updateGroupMembership, openGroupForm, clear, boardMode, mobileExportBusy, exportSelectedToMobile, bulkScheduleAt, setBulkScheduleAt, setBulkScheduleWarning, bulkSchedule, bulkMove, bulkScheduleWarning, spaces, moveToSpace, onStackSelection }: BoardBulkActionsProps) {
   if (!selected.size) return null
 
   return <div className="board-bulk-actions">
@@ -48,6 +49,7 @@ export function BoardBulkActions({ selected, selectedPosts, onAttachMedia, workG
       <button type="button" disabled={mobileExportBusy} onClick={() => void exportSelectedToMobile()}><Smartphone size={14} /> {mobileExportBusy ? 'Enviando…' : 'Enviar al celular'}</button>
       {selectedPosts.length > 1 && <div className="board-bulk-media"><span>Adjuntar medio a la selección</span><EditorMediaPicker media={[]} project="" targets={selectedPosts} onAttach={() => undefined} onAttachMany={onAttachMedia} /></div>}
       {boardMode === 'list' && <div className="bulk-schedule-control"><label htmlFor="bulk-schedule-at">Fecha y hora</label><input id="bulk-schedule-at" type="datetime-local" value={bulkScheduleAt} onChange={event => { setBulkScheduleAt(event.target.value); setBulkScheduleWarning('') }} /><button type="button" disabled={!bulkScheduleAt} onClick={bulkSchedule}>Programar</button></div>}
+      <button type="button" disabled={selected.size < 2} title="Apila la selección en la primera publicación (orden visual)" onClick={onStackSelection}><Layers size={14} /> Apilar selección</button>
       <button type="button" onClick={() => void bulkMove('draft')}>Borrador</button><button type="button" onClick={() => void bulkMove('review')}>Revisión</button><button type="button" onClick={() => void bulkMove('approved')}>Aprobadas</button><button type="button" onClick={() => void bulkMove('archived')}>Archivar</button>
     </div></details>
     {bulkScheduleWarning && <span className="bulk-schedule-warning" role="alert">{bulkScheduleWarning}</span>}

@@ -1,6 +1,6 @@
 # Pilas de publicaciones en el tablero — plan de diseño
 
-Estado: **aprobado por el usuario** (18nov26), incluyendo las respuestas a las preguntas abiertas (§10) y los puntos a resolver (§9). Alcance inicial: MVP persistente dentro de una columna + «Apilar selección» en el menú de selección múltiple.
+Estado: **implementado en `feature/10Nov26`** (migración `v34` + persistencia + store + UI del tablero). Semántica como la aprobada (§10, §9); notas de implementación en §11.
 
 ## 1. Semántica
 
@@ -169,3 +169,13 @@ Migración v34; tipos `Post.stackId/stackPosition`; `PostsRepository` escribe y 
 6. **«Apilar selección» en el MVP** en «Más acciones» (vía `stackPosts`; arrastre es atajo).
 7. **Chip único `Layers` + contador** junto a «Reel» (no separado).
 8. **Contador de columna cuenta publicaciones**.
+
+## 11. Notas de implementación (feature/10Nov26)
+
+- El tablero agrupa por `stack_id` al pintar cada columna; la pila ocupa el lugar de su superior. Si un filtro (búsqueda) deja visible a un único miembro, se pinta como tarjeta suelta (nunca «pila de 1»).
+- Pilas de 1 miembro se disuelven solas en todas las operaciones (renumeración central `renumberStackMembers` y en `save`).
+- La `save()` del store detecta cambios de `status`/`project` y desapila en el mismo `batch` de undo; `moveWithStacks` mueve la pila entera cuando **todos** sus miembros están en el conjunto arrastrado (mantener pila); conserva pilas en el caso contrario suelta los no-selectos.
+- `posts:reassign-project` acepta `keepStacks` para distinguir renombrar espacio (conserva pilas) de quitar espacio (deshace).
+- `stackPosts` fusiona pilas arrastradas al final de la destino conservando su orden relativo; desapila al arrastrar fuera de la lista expandida (mismo comportamiento sea en la misma columna o entre columnas).
+- Verificado con `test/electron/post-stacks.test.mts` (round-trip de v34 + repositorio) y `npm test` (66/66).
+

@@ -130,6 +130,42 @@
   .board-lanes-scroll { overflow: visible; }
 }
 
+/* === Pilas de publicaciones === */
+.board-stack-slot { overflow: visible; z-index: 2; }
+.board-stack-slot.expanded { height: auto; }
+.board-stack-layer { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; border: 1px solid #2d3730; border-radius: 6px; background: #131815; pointer-events: none; transition: transform .18s ease; }
+.board-stack-layer-1 { transform: translate(4px, 6px); }
+.board-stack-layer-2 { transform: translate(8px, 12px); background: #101511; }
+.board-stack-slot:hover .board-stack-layer-1 { transform: translate(6px, 8px) rotate(-1.6deg); }
+.board-stack-slot:hover .board-stack-layer-2 { transform: translate(12px, 15px) rotate(1.8deg); }
+@media (prefers-reduced-motion: reduce) { .board-stack-layer { transition: none; } .board-stack-slot:hover .board-stack-layer-1, .board-stack-slot:hover .board-stack-layer-2 { transform: translate(4px, 6px); } }
+.board-card.board-stack-card { z-index: 1; cursor: pointer; }
+.board-stack-chip { display: inline-flex; flex: none; align-items: center; gap: 2px; height: 20px; padding: 0 6px; border-radius: 4px; background: #232b25; color: #d7c07c; font: 700 9px 'DM Mono', monospace; }
+.board-card.stack-drop-target { border-color: #d0a64b; background: #26241a; box-shadow: inset 0 0 0 1px #d0a64b, 0 0 0 2px #d0a64b44; }
+.board-card.stack-drop-target::after { position: absolute; right: 6px; bottom: 6px; z-index: 6; padding: 2px 7px; border-radius: 9px; background: #d0a64b; color: #17130a; font: 700 9px 'Segoe UI', sans-serif; content: 'Apilar'; }
+.board-stack-expanded { display: grid; gap: 4px; padding: 6px; border: 1px solid #333d36; border-left: 2px solid #d0a64b; border-radius: 6px; background: #131815; }
+.board-stack-expanded-header { display: flex; align-items: center; gap: 6px; padding: 0 2px 6px; border-bottom: 1px solid #252e28; color: #d7c07c; }
+.board-stack-expanded-header strong { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.board-stack-expanded-header small { margin-right: auto; color: #77837a; font-size: 9px; }
+.board-stack-collapse { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid #333d36; border-radius: 4px; background: transparent; color: #aab5ad; cursor: pointer; }
+.board-stack-collapse:hover { background: #1c231e; color: #edf3ee; }
+.board-stack-collapse:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
+.board-stack-member { display: flex; align-items: center; gap: 7px; padding: 7px 8px; border: 1px solid #232b25; border-radius: 5px; background: #161c18; cursor: grab; }
+.board-stack-member:hover { border-color: #38443b; background: #1a211c; }
+.board-stack-member:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
+.board-stack-member.selected { border-color: #d0a64b; box-shadow: inset 0 0 0 1px #d0a64b; }
+.board-stack-member.is-dragging { opacity: .4; border-style: dashed; cursor: grabbing; }
+.board-stack-member.reorder-over-top { box-shadow: 0 -2px 0 #d0a64b; }
+.board-stack-member.reorder-over-bottom { box-shadow: 0 2px 0 #d0a64b; }
+.board-stack-member.stack-drop-target { border-color: #d0a64b; background: #221f18; }
+.board-stack-member .board-select-hit { position: static; flex: none; width: 18px; height: 18px; opacity: 1; pointer-events: auto; }
+.board-stack-member-index { flex: none; min-width: 26px; color: #8d988f; font: 10px 'DM Mono', monospace; }
+.board-stack-member-color { flex: none; width: 3px; align-self: stretch; border-radius: 2px; }
+.board-stack-member-title { flex: 1 1 auto; min-width: 0; overflow: hidden; color: #e8eee9; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.board-stack-member-date { display: inline-flex; flex: none; align-items: center; gap: 3px; color: #9aa69e; font-size: 9px; font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) { .board-stack-layer, .board-stack-member { transition: none; } }
+
 /* ---------- Feedback visual del drag & drop ---------- */
 .board-lane-cell { transition: background .12s ease; }
 /* Tarjeta(s) de origen: quedan como "hueco" atenuado mientras se arrastran */
