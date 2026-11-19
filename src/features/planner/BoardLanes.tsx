@@ -8,8 +8,8 @@ import { PasteFormatHint } from './PasteFormatHint'
 import { availableParsedFields, groupPayloadPosts, isStructuredPostText, parsePostsFromText, readClipboardPayload, type ClipboardPasteSource, type ClipboardPostField, type ParsedPost } from '../../shared/clipboard-payload'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, ChevronUp, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers, Layers3, MoreHorizontal, Network, Replace, Trash2, X } from 'lucide-react'
-import { contentLabels, stages, statusMeta } from '../../shared/constants'
+import { ArrowDown, ArrowUp, ArrowUpFromLine, CalendarDays, ChevronDown, ChevronRight, ChevronUp, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers, Layers3, MoreHorizontal, Network, Replace, Trash2 } from 'lucide-react'
+import { contentLabels, getPlatformMeta, stages, statusMeta } from '../../shared/constants'
 import { postColors } from '../../shared/postColors'
 import { runWithErrorReporting } from '../../app/errors'
 import { usePlanner } from '../../app/store'
@@ -17,6 +17,7 @@ import { PlatformMark } from '../../components/layout/AppShell'
 import type { ContentType, Post, WorkGroup } from '../../shared/types'
 
 const POST_IDS_MIME = 'application/x-caballocci-post-ids'
+const stackContentIcon = (contentType: ContentType) => contentType === 'reel' ? Film : contentType === 'carousel' ? Images : FileText
 
 export type BoardLane = { id: string; name: string; postIds: string[]; group: WorkGroup | null }
 
@@ -376,7 +377,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
             const orderIds = items.map(member => member.id)
             return <div className="board-stack-expanded" role="list" aria-label={`Pila de ${items.length} publicaciones`} key={`expanded-${stackId}`}>
               <div className="board-stack-expanded-header">
-                <Layers size={13} aria-hidden="true" /><strong>Pila · {items.length}</strong><small>Arrastrá fuera para desapilar</small>
+                <Layers size={13} aria-hidden="true" /><strong>Pila · {items.length}</strong><small>Arrastrá para sacar</small>
                 <button type="button" className="board-stack-collapse" aria-label="Colapsar pila" title="Colapsar pila" onClick={() => toggleStackExpand(stackId)}><ChevronUp size={14} /></button>
               </div>
               {items.map((member, index) => <div
@@ -394,14 +395,14 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
                 onClick={event => { if (onPickPost?.(member.id)) return; if (event.shiftKey || event.ctrlKey || event.metaKey || selected.size > 0) onToggle(member.id, event.shiftKey, orderIds); else onSelect(member.id) }}
                 onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); if (onPickPost?.(member.id)) return; onSelect(member.id) } }}
               >
-                <span className="board-stack-member-index">{index + 1}/{items.length}</span>
+                <span className="board-stack-member-index" aria-hidden="true">{index + 1}</span>
                 <label className="board-select-hit" onClick={event => event.stopPropagation()}>
                   <input type="checkbox" checked={selected.has(member.id)} onChange={event => onToggle(member.id, event.nativeEvent instanceof MouseEvent && event.nativeEvent.shiftKey, orderIds)} aria-label={`Seleccionar ${member.title || 'publicación'}`} />
                 </label>
-                <span className="board-stack-member-color" style={{ backgroundColor: member.color }} aria-hidden="true" />
-                <span className="board-stack-member-title">{member.title || 'Publicación sin título'}</span>
+                <span className="board-stack-member-icons" title={`${contentLabels[member.contentType]}${member.platforms[0] ? ` · ${getPlatformMeta(member.platforms[0]).label}` : ''}`} aria-hidden="true">{(() => { const Icon = stackContentIcon(member.contentType); return <Icon size={12} /> })()}{member.platforms[0] && <PlatformMark platform={member.platforms[0]} small />}</span>
+                <span className="board-stack-member-title" title={member.title || 'Publicación sin título'}>{member.title || 'Publicación sin título'}</span>
                 {member.scheduledAt && <span className="board-stack-member-date"><CalendarDays size={11} aria-hidden="true" />{format(parseISO(member.scheduledAt), 'd MMM', { locale: es })}</span>}
-                <button type="button" className="board-stack-member-unstack" aria-label={`Sacar de la pila: ${member.title || 'publicación'}`} title="Sacar de la pila" onClick={event => { event.stopPropagation(); void runWithErrorReporting(() => usePlanner.getState().unstackPost(member.id), 'No se pudo desapilar') }}><X size={13} /></button>
+                <button type="button" className="board-stack-member-unstack" aria-label={`Sacar de la pila: ${member.title || 'publicación'}`} title="Sacar de la pila" onClick={event => { event.stopPropagation(); void runWithErrorReporting(() => usePlanner.getState().unstackPost(member.id), 'No se pudo desapilar') }}><ArrowUpFromLine size={13} /></button>
               </div>)}
             </div>
           }
