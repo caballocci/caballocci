@@ -19,14 +19,14 @@ import { EditorMediaPicker } from './EditorMediaPicker'
 import { Preview } from './EditorMediaPreview'
 import './editor.css'
 
-export function Editor({ initial, scheduledAtForNew = null, spaceForNew, collectionForNew = null, sessionPosts = [], onSessionNavigate, onSessionAdd, onSessionClose, onClose, minimized: minimizedProp, onMinimizedChange, boardPick = false, mediaAttachment, showMediaPickerInEditor = true }: { initial: Post | null; scheduledAtForNew?: string | null; spaceForNew?: string | null; collectionForNew?: string | null; sessionPosts?: Post[]; onSessionNavigate?(id: string): void; onSessionAdd?(id: string): void; onSessionClose?(id: string, nextId: string | null): void; onClose(): void; minimized?: boolean; onMinimizedChange?(minimized: boolean): void; boardPick?: boolean; mediaAttachment?: { id: string; postId: string; assets: MediaAsset[] } | null; showMediaPickerInEditor?: boolean }) {
+export function Editor({ initial, scheduledAtForNew = null, initialStatusForNew = null, spaceForNew, collectionForNew = null, sessionPosts = [], onSessionNavigate, onSessionAdd, onSessionClose, onClose, minimized: minimizedProp, onMinimizedChange, boardPick = false, mediaAttachment, showMediaPickerInEditor = true }: { initial: Post | null; scheduledAtForNew?: string | null; initialStatusForNew?: PostStatus | null; spaceForNew?: string | null; collectionForNew?: string | null; sessionPosts?: Post[]; onSessionNavigate?(id: string): void; onSessionAdd?(id: string): void; onSessionClose?(id: string, nextId: string | null): void; onClose(): void; minimized?: boolean; onMinimizedChange?(minimized: boolean): void; boardPick?: boolean; mediaAttachment?: { id: string; postId: string; assets: MediaAsset[] } | null; showMediaPickerInEditor?: boolean }) {
   const { save, remove, uncombinePost, activeSpace, customSpaces, posts, ideas, selectIdea, setView, quickWrites: quickWritesBySpace, spaceKey, saveQuickWrites } = usePlanner()
   const draftKey = `caballocci.draft.${initial?.id || 'new'}`
   const project = spaceForNew === undefined ? activeSpace || 'Mi contenido' : spaceForNew || 'Mi contenido'
   const initialDraft = useState<PostInput>(() => {
     if (initial) return { ...initial }
-    try { const saved = JSON.parse(localStorage.getItem(draftKey) || '') as PostInput; if (saved && typeof saved === 'object') return { ...saved, project, ...(scheduledAtForNew ? { scheduledAt: scheduledAtForNew, status: 'scheduled' as const } : {}) } } catch { /* Ignore invalid drafts. */ }
-    return { ...blankPost(project), ...(scheduledAtForNew ? { scheduledAt: scheduledAtForNew, status: 'scheduled' as const } : {}) }
+    try { const saved = JSON.parse(localStorage.getItem(draftKey) || '') as PostInput; if (saved && typeof saved === 'object') return { ...saved, project, ...(scheduledAtForNew ? { scheduledAt: scheduledAtForNew, status: 'scheduled' as const } : initialStatusForNew ? { status: initialStatusForNew } : {}) } } catch { /* Ignore invalid drafts. */ }
+    return { ...blankPost(project), ...(scheduledAtForNew ? { scheduledAt: scheduledAtForNew, status: 'scheduled' as const } : initialStatusForNew ? { status: initialStatusForNew } : {}) }
   })[0]
   const { value: draft, setValue: setDraft, undo, redo, canUndo, canRedo } = useUndoableState<PostInput>(initialDraft)
   const quickWriteSpace = draft.project || activeSpace || 'Mi contenido'

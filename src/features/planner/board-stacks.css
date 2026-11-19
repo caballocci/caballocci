@@ -1,0 +1,162 @@
+/* === Pilas de publicaciones === */
+/* Tokens propios de las pilas: superficie, filas y acento.
+   El acento sale de --status-color, que la celda ya define por etapa:
+   así la pila hereda el color de su columna y el dorado queda para la selección. */
+.board-lanes {
+  --stack-surface: #0f1410;
+  --stack-row: #1b231d;
+  --stack-row-border: #344138;
+  --stack-muted: #93a096;
+}
+.board-stack-slot { overflow: visible; z-index: 2; }
+.board-stack-slot.expanded { height: auto; }
+.board-stack-layer { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; border: 1px solid #2d3730; border-radius: 6px; background: #131815; pointer-events: none; transition: transform .22s ease-out, opacity .18s ease-out; transition-delay: 0s; }
+/* Capa 1 = segundo miembro, capa 2 = tercero. El tinte es suave: da ambiente sin tapar la tarjeta. */
+.board-stack-layer-1 { transform: translate(4px, 6px); background: color-mix(in srgb, var(--stack-layer-1, #6b726c) 24%, #131815); border-color: color-mix(in srgb, var(--stack-layer-1, #2d3730) 30%, #2d3730); }
+.board-stack-layer-2 { transform: translate(8px, 12px); background: color-mix(in srgb, var(--stack-layer-2, #6b726c) 18%, #101511); border-color: color-mix(in srgb, var(--stack-layer-2, #2d3730) 24%, #2d3730); }
+.board-stack-slot:hover .board-stack-layer-1 { transform: translate(5px, 7px); }
+.board-stack-slot:hover .board-stack-layer-2 { transform: translate(10px, 14px); }
+.board-stack-slot.stack-drop-target .board-stack-layer-1 { border-color: #d0a64b; background: #262418; transform: translate(6px, 8px); transition: none; }
+.board-stack-slot.stack-drop-target .board-stack-layer-2 { border-color: #b58a3c; background: #1c1a12; transform: translate(12px, 15px); transition: none; }
+@media (prefers-reduced-motion: reduce) { .board-stack-layer { transition: none; } .board-stack-slot:hover .board-stack-layer-1, .board-stack-slot:hover .board-stack-layer-2 { transform: translate(4px, 6px); } }
+.board-card.board-stack-card { z-index: 1; cursor: pointer; }
+.board-stack-slot.stack-drop-target .board-card { border-color: #d0a64b; background: #26241a; box-shadow: inset 0 0 0 1px #d0a64b, 0 0 0 2px #d0a64b44; }
+.board-stack-slot.stack-drop-target .board-card::after { position: absolute; right: 6px; bottom: 6px; z-index: 6; padding: 3px 9px; border-radius: 9px; background: #d0a64b; color: #17130a; font: 700 10px 'Segoe UI', sans-serif; content: 'Apilar'; }
+
+/* === Card de pila cerrada: resumen sobrio ===
+   La pila es una unidad organizativa; el contenido es una segunda capa:
+   en reposo solo capas + cantidad + título del tope + señal mínima.
+   El hover revela una vista previa que se despliega hacia abajo sin desplazar la columna. */
+/* El slot crece con el preview (height: auto) para que la columna se reordene en vez de superponerse. */
+.board-card-slot.board-stack-slot.stack-closed { min-height: 112px; height: auto; }
+.board-stack-slot.stack-closed:hover, .board-stack-slot.stack-closed:focus-within { z-index: 6; }
+.board-lane-cell article.board-stack-summary { display: flex; flex-direction: column; height: auto; min-height: 112px; padding: 10px 11px; background: #151b17; border-color: #29322c; overflow: visible; }
+.board-lane-cell article.board-stack-summary.has-custom-color { background: color-mix(in srgb, var(--post-color) 13%, #151b17); border-color: #29322c; }
+.board-lane-cell article.board-stack-summary:hover, .board-lane-cell article.board-stack-summary:focus-within { border-color: color-mix(in srgb, var(--status-color, #4a574e) 58%, #4a574e); background: #1a221d; box-shadow: 0 6px 16px #0009; }
+.board-lane-cell article.board-stack-summary.has-custom-color:hover, .board-lane-cell article.board-stack-summary.has-custom-color:focus-within { border-color: color-mix(in srgb, var(--status-color, #4a574e) 58%, #4a574e); background: color-mix(in srgb, var(--post-color) 17%, #1a221d); }
+.board-lane-cell article.board-stack-summary.is-dragging, .board-lane-cell article.board-stack-summary.is-dragging:hover { height: 112px; min-height: 0; }
+.board-stack-summary-row { display: flex; flex: none; align-items: center; gap: 8px; min-width: 0; }
+.board-stack-summary-badge { display: inline-flex; flex: none; align-items: center; gap: 6px; color: var(--status-color, #d0a64b); }
+.board-stack-summary-badge b { color: #ecefe9; font: 700 13px 'DM Mono', monospace; font-variant-numeric: tabular-nums; }
+.board-stack-summary:hover .board-stack-summary-badge, .board-stack-summary:focus-within .board-stack-summary-badge, .board-lanes.selection-active .board-stack-summary-badge { visibility: hidden; }
+.board-stack-summary-types { display: inline-flex; flex: none; align-items: center; gap: 7px; }
+.board-stack-summary-type { display: inline-flex; align-items: center; gap: 2px; color: #8d988f; }
+.board-stack-summary-type i { color: #71806f; font: 10px 'DM Mono', monospace; font-style: normal; }
+.board-stack-summary-platforms { display: inline-flex; flex: none; align-items: center; gap: 4px; margin-left: auto; }
+/* Título del miembro superior: identifica la pila cerrada; «+N» resume el resto. */
+.board-stack-summary-title { position: relative; display: flex; flex: none; align-items: baseline; gap: 6px; min-width: 0; margin-top: 7px; color: #e6ece7; font-size: 11.5px; font-weight: 600; line-height: 15px; }
+.board-stack-summary-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-stack-summary-title > em { flex: none; color: var(--stack-muted); font: 600 9px 'DM Mono', monospace; font-style: normal; }
+/* Tooltip animado al reposar el puntero (o enfocar la tarjeta): revela el título completo.
+   Mismo retardo de entrada que el preview (~.35s), salida inmediata; sin tooltip nativo. */
+.board-stack-summary-title::before,
+.board-stack-summary-title::after { opacity: 0; pointer-events: none; transition: opacity .16s ease, transform .22s cubic-bezier(.2,.7,.2,1); }
+/* Caret: cuadrado girado 45°, solo los lados que miran hacia el título llevan borde. */
+.board-stack-summary-title::before { content: ''; position: absolute; z-index: 31; top: calc(100% + 2px); left: 14px; width: 8px; height: 8px; border-top: 1px solid #3a463d; border-left: 1px solid #3a463d; background: #1a211c; transform: translateY(4px) rotate(45deg) scale(.92); }
+.board-stack-summary-title::after { content: attr(data-full-title); position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; width: max-content; max-width: min(300px, 78vw); padding: 7px 10px; border: 1px solid #3a463d; border-radius: 6px; background: #1a211c; color: #e8eee9; box-shadow: 0 10px 26px #000c; font-size: 11px; font-weight: 500; line-height: 15px; white-space: normal; overflow-wrap: anywhere; transform: translateY(4px) scale(.96); transform-origin: 18px top; }
+.board-stack-summary:hover .board-stack-summary-title::before,
+.board-stack-summary:focus-within .board-stack-summary-title::before { opacity: 1; transform: rotate(45deg); transition-delay: .35s; }
+.board-stack-summary:hover .board-stack-summary-title::after,
+.board-stack-summary:focus-within .board-stack-summary-title::after { opacity: 1; transform: translateY(0) scale(1); transition-delay: .35s; }
+@media (prefers-reduced-motion: reduce) { .board-stack-summary-title::before, .board-stack-summary-title::after { transition: none; } }
+.board-stack-summary-foot { display: flex; flex: none; align-items: center; gap: 6px; margin-top: auto; padding-top: 6px; }
+.board-stack-summary-date { display: inline-flex; align-items: center; gap: 4px; color: #9aa69e; font-size: 9px; white-space: nowrap; }
+.board-stack-summary-date time { color: #c3ccc5; font-variant-numeric: tabular-nums; }
+.board-stack-summary-date.overdue { color: #e6ad70; }
+.board-stack-summary-date.overdue b { padding: 1px 4px; border-radius: 3px; background: #39281b; color: #efbc7a; font-size: 8px; font-weight: 600; }
+/* Indicador móvil de la pila: un teléfono agregado en el pie, con la cantidad si hay varios. */
+.board-stack-summary-foot .board-mobile-state { flex: none; margin-top: 0; margin-left: auto; }
+.board-mobile-state.discreet.board-mobile-stack { width: auto; min-width: 21px; gap: 3px; padding: 0 5px; font-size: 8px; }
+.board-mobile-state.discreet.board-mobile-stack b { font: 700 9px 'DM Mono', monospace; font-style: normal; }
+/* Franja de colores de la pila cerrada: una muestra del color de cada miembro apilado (sin repetir). */
+.board-stack-color-strip { display: flex; flex: none; gap: 5px; margin-top: 6px; }
+.board-stack-color-chip { flex: none; width: 8px; height: 8px; border-radius: 2px; border: 1px solid #0004; opacity: .9; }
+/* Vista previa al pasar el mouse: todos los miembros de la pila (sin truncar).
+   El retardo de entrada (~150 ms) evita que la pila se abra al cruzar la columna; al salir es inmediato. */
+.board-stack-preview { flex: none; max-height: 0; margin-top: 0; padding-top: 0; overflow: hidden; opacity: 0; border-top: 1px solid #252e28; transition: max-height .22s ease-out, opacity .18s ease-out, margin-top .22s ease-out, padding-top .22s ease-out; transition-delay: 0s; }
+.board-stack-summary:hover .board-stack-preview, .board-stack-summary:focus-within .board-stack-preview { max-height: min(55vh, 340px); margin-top: 8px; padding-top: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #465149 transparent; opacity: 1; transition-delay: .15s; }
+.board-stack-preview-item { display: flex; align-items: flex-start; gap: 6px; padding: 4px 2px; color: #8d988f; }
+.board-stack-preview-item + .board-stack-preview-item { border-top: 1px solid #202722; }
+/* Cada ítem del preview lleva su franja de color propia (solo si el color es elegido). */
+.board-stack-preview-item.has-custom-color { border-left: 3px solid var(--post-color); padding-left: 6px; }
+.board-stack-preview-item svg { flex: none; margin-top: 2px; }
+.board-stack-preview-item > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; min-width: 0; overflow: hidden; overflow-wrap: anywhere; color: #dfe7e1; font-size: 10.5px; line-height: 14px; }
+.board-stack-preview-more { padding: 5px 2px 1px; color: var(--status-color, #d0a64b); font: 600 9px 'DM Mono', monospace; letter-spacing: .04em; }
+/* Las capas se desvanecen al revelar la vista previa (con el mismo retardo de entrada). */
+.board-stack-slot.stack-closed:hover .board-stack-layer, .board-stack-slot.stack-closed:focus-within .board-stack-layer { opacity: 0; transition-delay: .15s; }
+/* === Fin card de pila cerrada === */
+
+/* Contenedor más oscuro y filas más claras: la jerarquía se lee de un vistazo. */
+.board-stack-expanded { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; width: 100%; margin: 0; padding: 6px; border: 1px solid var(--stack-row-border); box-shadow: inset 2px 0 0 var(--status-color, #8fbf4a); border-radius: 6px; background: var(--stack-surface); min-width: 0; }
+/* Soltar sobre el encabezado, un hueco o el fondo de la pila abierta también apila. */
+.board-stack-expanded.stack-drop-target { border-color: #d0a64b; box-shadow: inset 2px 0 0 #d0a64b, 0 0 0 1px #d0a64b88; }
+.board-card-slot.board-stack-slot.expanded { min-width: 0; height: auto; }
+.board-stack-expanded-header { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px 6px; border-bottom: 1px solid #252e28; color: color-mix(in srgb, var(--status-color, #d7c07c) 72%, #e8eee9); }
+.board-stack-expanded-header strong { flex: none; margin-right: auto; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+/* Acciones sobre toda la pila: selección total y menú contextual reutilizado (archivar, programar, formato…). */
+.board-stack-select-all { display: grid; flex: none; width: 22px; height: 22px; place-items: center; cursor: pointer; }
+.board-stack-select-all input { width: 13px; height: 13px; margin: 0; appearance: none; border: 1px solid #68736b; border-radius: 3px; background: #171d19; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
+.board-stack-select-all input:checked, .board-stack-select-all input:indeterminate { border-color: #d0a64b; background: #d0a64b; }
+.board-stack-select-all input:checked::after { display: block; width: 4px; height: 7px; margin: 1px 0 0 4px; border: solid #171d19; border-width: 0 2px 2px 0; content: ''; transform: rotate(45deg); }
+.board-stack-select-all input:indeterminate::after { display: block; width: 7px; height: 2px; margin: 5px auto; background: #171d19; content: ''; }
+.board-stack-select-all input:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
+.board-stack-actions { display: grid; flex: none; width: 24px; height: 24px; place-items: center; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8d988f; cursor: pointer; }
+.board-stack-actions:hover { border-color: #3a463d; background: #222a24; color: #edf3ee; }
+.board-stack-actions:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
+.board-stack-collapse { display: grid; flex: none; width: 26px; height: 26px; place-items: center; border: 1px solid #3a463d; border-radius: 4px; background: #1c231e; color: #cfd6cf; cursor: pointer; }
+.board-stack-collapse:hover { background: #222a24; color: #edf3ee; border-color: #525f55; }
+.board-stack-collapse:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
+/* Miembro de pila expandida: alto estable, el título nunca estira la fila */
+.board-stack-member { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: start; min-width: 0; padding: 7px 8px; border: 1px solid var(--stack-row-border); border-radius: 5px; background: var(--stack-row); cursor: grab; }
+.board-stack-member-icons { grid-column: 1; grid-row: 1 / span 2; display: inline-flex; align-items: center; gap: 4px; height: 15px; color: #8d988f; }
+.board-stack-member-title { grid-column: 2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-width: 0; max-height: 30px; overflow: hidden; overflow-wrap: anywhere; color: #e8eee9; font-size: 11px; line-height: 15px; }
+.board-stack-member-date { grid-column: 2; grid-row: 2; display: inline-flex; align-items: center; gap: 3px; margin-top: 3px; color: #9aa69e; font-size: 9px; font-variant-numeric: tabular-nums; }
+/* Fila inferior del miembro: fecha y estado móvil, sin deformar el alto del título. */
+.board-stack-member-meta { grid-column: 2; grid-row: 2; display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 3px; }
+.board-stack-member-meta .board-stack-member-date { margin-top: 0; }
+.board-stack-member-meta .board-mobile-state { flex: none; margin-top: 0; }
+.board-stack-member.has-custom-color { background: color-mix(in srgb, var(--post-color) 12%, var(--stack-row)); }
+/* Franja de 3 px con el color elegido: el tinte da ambiente, la franja dice cuál es. */
+.board-stack-member.has-custom-color::before { position: absolute; top: 0; bottom: 0; left: 0; width: 3px; border-radius: 5px 0 0 5px; background: var(--post-color); content: ''; }
+.board-stack-member.has-custom-color:hover { background: color-mix(in srgb, var(--post-color) 17%, #202922); }
+.board-stack-member:hover { border-color: #46544a; background: #202922; }
+.board-stack-member:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
+.board-stack-member.selected { border-color: #d0a64b; box-shadow: inset 0 0 0 1px #d0a64b; }
+.board-stack-member.is-dragging { opacity: .4; border-style: dashed; cursor: grabbing; }
+.board-stack-member.reorder-over-top { box-shadow: 0 -2px 0 #d0a64b; }
+.board-stack-member.reorder-over-bottom { box-shadow: 0 2px 0 #d0a64b; }
+.board-stack-member.stack-drop-target { border-color: #d0a64b; background: #221f18; }
+/* Los íconos de plataforma bajan su saturación dentro de las filas para no competir con el acento de la etapa. */
+.board-stack-member .platform-mark,
+.board-stack-summary-platforms .platform-mark,
+.board-stack-preview-item .platform-mark { filter: saturate(.35); opacity: .78; transition: filter .15s ease, opacity .15s ease; }
+.board-stack-member:hover .platform-mark,
+.board-stack-member:focus-within .platform-mark,
+.board-lane-cell article.board-stack-summary:hover .platform-mark,
+.board-lane-cell article.board-stack-summary:focus-within .platform-mark,
+.board-stack-preview-item:hover .platform-mark { filter: none; opacity: 1; }
+/* Controles superpuestos: no ocupan ancho */
+.board-stack-member .board-select-hit { position: absolute; top: 6px; left: 7px; width: 18px; height: 18px; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.board-stack-member:hover .board-select-hit, .board-stack-member:focus-within .board-select-hit, .board-lanes.selection-active .board-stack-member .board-select-hit { opacity: 1; pointer-events: auto; }
+.board-stack-member:hover .board-stack-member-icons > :first-child, .board-stack-member:focus-within .board-stack-member-icons > :first-child, .board-lanes.selection-active .board-stack-member-icons > :first-child { visibility: hidden; }
+.board-stack-member .board-stack-member-unstack { position: absolute; top: 4px; right: 4px; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid #38443b; border-radius: 4px; background: #1f2721; color: #8d988f; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.board-stack-member:hover .board-stack-member-unstack, .board-stack-member:focus-within .board-stack-member-unstack { opacity: 1; pointer-events: auto; }
+.board-stack-member .board-stack-member-unstack:hover { background: #2a201d; color: #e8c08f; }
+.board-stack-member .board-stack-member-unstack:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; opacity: 1; pointer-events: auto; }
+
+@media (prefers-reduced-motion: reduce) { .board-stack-layer, .board-stack-member, .board-stack-member-title, .board-stack-preview { transition: none; } }
+
+/* ---------- Toast de deshacer al apilar/desapilar ---------- */
+.board-stack-undo { position: fixed; bottom: 22px; left: 50%; z-index: 40; display: flex; align-items: center; gap: 12px; max-width: min(420px, calc(100vw - 32px)); padding: 9px 10px 9px 14px; border: 1px solid #3a463d; border-radius: 8px; background: #1a211c; color: #e8eee9; box-shadow: 0 12px 30px #000b; font-size: 11px; transform: translateX(-50%); animation: board-stack-undo-in .18s ease-out; }
+.board-stack-undo > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-stack-undo button { flex: none; padding: 5px 10px; border: 1px solid #6b5840; border-radius: 5px; background: #2b2418; color: #f0dfbd; font-size: 10px; font-weight: 700; cursor: pointer; }
+.board-stack-undo button:hover { border-color: #a48a61; background: #3a3020; color: #fff4df; }
+.board-stack-undo button:focus-visible { outline: 2px solid #d0a64b; outline-offset: 2px; }
+@keyframes board-stack-undo-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .board-stack-undo { animation: none; } }
+
+/* ---------- Expandir/colapsar pilas con View Transitions ---------- */
+/* El resto del tablero no se cross-fadea: solo el slot de la pila con nombre propio anima su geometría. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; opacity: 1; mix-blend-mode: normal; }
+::view-transition-group(*) { animation-duration: .24s; animation-timing-function: cubic-bezier(.2, .7, .2, 1); }
+::view-transition-old(*), ::view-transition-new(*) { animation-duration: .2s; animation-timing-function: ease-out; }

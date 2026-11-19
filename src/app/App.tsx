@@ -5,7 +5,7 @@ import { reportAppError } from './errors'
 import { postMatchesQuery, usePlanner } from './store'
 import { AppErrorBoundary, GlobalErrorCenter } from '../components/layout/GlobalErrorCenter'
 import { UpdateDialog } from '../components/UpdateDialog'
-import type { MediaAsset } from '../shared/types'
+import type { MediaAsset, PostStatus } from '../shared/types'
 
 const Editor = lazy(() => import('../features/editor/Editor').then(module => ({ default: module.Editor })))
 const ConceptMap = lazy(() => import('../features/concept-map/ConceptMap').then(module => ({ default: module.ConceptMap })))
@@ -24,6 +24,7 @@ function AppContent() {
   const [scheduledAtForNew, setScheduledAtForNew] = useState<string | null>(null)
   const [newPostSpace, setNewPostSpace] = useState<string | null>(null)
   const [newPostCollectionId, setNewPostCollectionId] = useState<string | null>(null)
+  const [newPostStatusForCreate, setNewPostStatusForCreate] = useState<PostStatus | null>(null)
   const [editorSessionIds, setEditorSessionIds] = useState<string[] | null>(null)
   const [editorMinimized, setEditorMinimized] = useState(false)
   const [mediaAttachment, setMediaAttachment] = useState<{ id: string; postId: string; assets: MediaAsset[] } | null>(null)
@@ -107,6 +108,7 @@ function AppContent() {
       if (editorSessionIds) setEditorSessionIds(null)
       if (creating) setCreating(false)
       setScheduledAtForNew(null)
+      setNewPostStatusForCreate(null)
     }
     previousView.current = view
   }, [view, selectedId, creating, editorMinimized, editorSessionIds, select])
@@ -116,6 +118,7 @@ function AppContent() {
       setScheduledAtForNew(null)
       setNewPostSpace(null)
       setNewPostCollectionId(null)
+      setNewPostStatusForCreate(null)
     }
     previousSpace.current = activeSpace
   }, [activeSpace, creating])
@@ -158,7 +161,17 @@ function AppContent() {
   const editorSession = editorSessionIds?.map(id => posts.find(post => post.id === id)).filter((post): post is NonNullable<typeof post> => Boolean(post)) || []
   const editorPickMode = editorMinimized && Boolean(selectedId)
   const editorSessionPostIds = new Set(editorPickMode ? editorSessionIds || (selectedId ? [selectedId] : []) : [])
-  const closeEditor = () => { setEditorMinimized(false); setCreating(false); setScheduledAtForNew(null); setNewPostSpace(null); setNewPostCollectionId(null); setEditorSessionIds(null); select(null) }
+  const closeEditor = () => { setEditorMinimized(false); setCreating(false); setScheduledAtForNew(null); setNewPostSpace(null); setNewPostCollectionId(null); setNewPostStatusForCreate(null); setEditorSessionIds(null); select(null) }
+  const createPostInStatus = (status: PostStatus) => {
+    setEditorMinimized(false)
+    setEditorSessionIds(null)
+    select(null)
+    setScheduledAtForNew(null)
+    setNewPostSpace(activeSpace)
+    setNewPostCollectionId(view === 'board' ? (usePlanner.getState().activeWorkGroupId ?? null) : null)
+    setNewPostStatusForCreate(status)
+    setCreating(true)
+  }
   const addEditorSessionPost = (id: string) => {
     const currentIds = editorSessionIds || (selectedId ? [selectedId] : [])
     if (!currentIds.length || currentIds.includes(id)) return
@@ -211,7 +224,7 @@ function AppContent() {
             )}
             {view === 'timeline' && <Timeline onNewScheduled={scheduledAt => { select(null); setScheduledAtForNew(scheduledAt); setNewPostSpace(activeSpace); setNewPostCollectionId(null); setCreating(true) }} />}
             {view === 'calendar' && <CalendarView onPickPost={pickEditorSessionPost} pickMode={editorPickMode} pickedPostIds={editorSessionPostIds} />}
-            {view === 'board' && <Board onPickPost={pickEditorSessionPost} pickMode={editorPickMode} pickedPostIds={editorSessionPostIds} onEditSelection={ids => { const validIds = ids.filter(id => posts.some(post => post.id === id)); if (!validIds.length) return; setEditorMinimized(false); setCreating(false); setEditorSessionIds(validIds); select(validIds[0]) }} />}
+            {view === 'board' && <Board onPickPost={pickEditorSessionPost} pickMode={editorPickMode} pickedPostIds={editorSessionPostIds} onEditSelection={ids => { const validIds = ids.filter(id => posts.some(post => post.id === id)); if (!validIds.length) return; setEditorMinimized(false); setCreating(false); setEditorSessionIds(validIds); select(validIds[0]) }} onCreatePostInStatus={createPostInStatus} />}
             {view === 'ideas' && <IdeasView />}
             {view === 'concept-map' && <ConceptMap />}
             {view === 'library' && <LibraryView />}
@@ -223,7 +236,7 @@ function AppContent() {
     </main>
     {(creating || selected) && <AppErrorBoundary key={selected?.id || 'new'}>
       <Suspense fallback={<div className="loading" role="status"><p>Cargando editor...</p></div>}>
-        <Editor initial={selected} scheduledAtForNew={scheduledAtForNew} spaceForNew={newPostSpace} collectionForNew={newPostCollectionId} sessionPosts={selected ? (editorSessionIds ? editorSession : [selected]) : undefined} minimized={editorMinimized} onMinimizedChange={setEditorMinimized} boardPick={Boolean(selected)} mediaAttachment={mediaAttachment} showMediaPickerInEditor={!selected || (view !== 'board' && view !== 'calendar')} onSessionNavigate={id => select(id)} onSessionAdd={addEditorSessionPost} onSessionClose={closeEditorSessionPost} onClose={closeEditor} />
+        <Editor initial={selected} scheduledAtForNew={scheduledAtForNew} initialStatusForNew={newPostStatusForCreate} spaceForNew={newPostSpace} collectionForNew={newPostCollectionId} sessionPosts={selected ? (editorSessionIds ? editorSession : [selected]) : undefined} minimized={editorMinimized} onMinimizedChange={setEditorMinimized} boardPick={Boolean(selected)} mediaAttachment={mediaAttachment} showMediaPickerInEditor={!selected || (view !== 'board' && view !== 'calendar')} onSessionNavigate={id => select(id)} onSessionAdd={addEditorSessionPost} onSessionClose={closeEditorSessionPost} onClose={closeEditor} />
       </Suspense>
     </AppErrorBoundary>}
     {(view === 'board' || view === 'calendar') && selected && <AppErrorBoundary key="planner-day-switcher"><Suspense fallback={null}><BoardDaySwitcher onPickPost={pickEditorSessionPost} pickedPostIds={editorSessionPostIds} onAttachMedia={(postId, assets) => setMediaAttachment({ id: crypto.randomUUID(), postId, assets })} /></Suspense></AppErrorBoundary>}

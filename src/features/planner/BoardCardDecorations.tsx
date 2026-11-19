@@ -60,6 +60,54 @@ export function MobileCardStatus({ state, postId, detailLevel }: { state: Mobile
   return <span className={`board-mobile-state ${kind}`} title={title}><Smartphone size={11} /> {label}</span>
 }
 
+type MobileStateKind = 'retirement-pending' | 'awaiting' | 'current' | 'previous' | 'never'
+
+function mobileKindForPost(state: MobilePublicationState, postId: string): MobileStateKind {
+  if (state.currentPostIds.includes(postId)) {
+    const progress = state.progressByPostId[postId]
+    if (progress?.retirementPending) return 'retirement-pending'
+    if (progress?.awaitingConfirmation) return 'awaiting'
+    return 'current'
+  }
+  return state.previouslyExportedPostIds.includes(postId) ? 'previous' : 'never'
+}
+
+const mobileKindPriority: MobileStateKind[] = ['retirement-pending', 'awaiting', 'current', 'previous']
+
+/**
+ * Indicador agregado del catálogo móvil para una pila: resume el estado de todos sus
+ * miembros en un solo teléfono (con la cantidad cuando hay más de uno) y deja el
+ * desglose en el tooltip. Así la pila no queda ciega a la integración móvil.
+ */
+export function MobileStackStatus({ state, postIds, detailLevel }: { state: MobilePublicationState | null; postIds: string[]; detailLevel: BoardCardDetailLevel }) {
+  if (detailLevel === 'hidden') return null
+  if (!state || !state.configured) {
+    if (detailLevel === 'discreet') return null
+    return <span className="board-mobile-state unknown"><Smartphone size={11} /> {state ? 'Sin configurar' : 'Consultando'}</span>
+  }
+  const counts = new Map<MobileStateKind, number>()
+  for (const postId of postIds) {
+    const kind = mobileKindForPost(state, postId)
+    if (kind !== 'never') counts.set(kind, (counts.get(kind) ?? 0) + 1)
+  }
+  const total = [...counts.values()].reduce((sum, count) => sum + count, 0)
+  if (!total) return null
+  const kind = mobileKindPriority.find(candidate => counts.has(candidate)) ?? 'current'
+  const label = total === 1 ? '1 publicación en la app móvil' : `${total} publicaciones en la app móvil`
+  const parts: string[] = []
+  const pending = counts.get('retirement-pending') ?? 0
+  const awaiting = counts.get('awaiting') ?? 0
+  const current = counts.get('current') ?? 0
+  const previous = counts.get('previous') ?? 0
+  if (pending) parts.push(`${pending} con retiro pendiente`)
+  if (awaiting) parts.push(`${awaiting} esperando confirmación`)
+  if (current) parts.push(`${current} con uso confirmado`)
+  if (previous) parts.push(`${previous} exportada${previous === 1 ? '' : 's'} antes`)
+  const title = `${label}. ${parts.join(', ')}.`
+  if (detailLevel === 'full') return <span className={`board-mobile-state ${kind}`} title={title}><Smartphone size={11} /> {label}</span>
+  return <span className={`board-mobile-state ${kind} discreet board-mobile-stack`} title={title} aria-label={title}><Smartphone size={11} />{total > 1 && <b>{total}</b>}</span>
+}
+
 export function BoardCardColorPicker({ post, onColor }: { post: Post; onColor(color: string): void }) {
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
