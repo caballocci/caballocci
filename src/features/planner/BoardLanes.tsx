@@ -8,7 +8,7 @@ import { PasteFormatHint } from './PasteFormatHint'
 import { availableParsedFields, groupPayloadPosts, isStructuredPostText, parsePostsFromText, readClipboardPayload, type ClipboardPasteSource, type ClipboardPostField, type ParsedPost } from '../../shared/clipboard-payload'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, ChevronUp, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers, Layers3, MoreHorizontal, Network, Replace, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, ChevronUp, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers, Layers3, MoreHorizontal, Network, Replace, Trash2, X } from 'lucide-react'
 import { contentLabels, stages, statusMeta } from '../../shared/constants'
 import { postColors } from '../../shared/postColors'
 import { runWithErrorReporting } from '../../app/errors'
@@ -172,16 +172,11 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     return ids.every(id => posts.find(item => item.id === id)?.status === targetStatus)
   }
 
-  /** Zona central de la tarjeta = apilar; bordes = comportamiento normal de la columna. */
-  const isStackBand = (event: React.DragEvent<HTMLElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    return event.clientY > rect.top + rect.height * 0.22 && event.clientY < rect.bottom - rect.height * 0.22
-  }
-
+  /** Zona de apilado: toda la tarjeta de la misma columna (es la única acción posible sobre ella).
+      El drop en el espacio libre de la celda sigue moviendo como siempre. */
   const collapsedCardDragOver = (event: React.DragEvent<HTMLElement>, post: Post, columnStatus: Post['status']) => {
     if (!carriesPosts(event)) return
     if (post.status !== columnStatus || !canStackOn(columnStatus)) return // otra columna: la tarjeta nunca apila, mueve
-    if (!isStackBand(event)) return // bordes: deja pasar a la celda (comportamiento normal)
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
@@ -190,7 +185,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
 
   const collapsedCardDrop = (event: React.DragEvent<HTMLElement>, post: Post, columnStatus: Post['status']) => {
     if (!carriesPosts(event)) return
-    if (post.status !== columnStatus || !canStackOn(columnStatus) || !isStackBand(event)) return // destino/arrastre de otra columna o bordes: deja pasar a la celda
+    if (post.status !== columnStatus || !canStackOn(columnStatus)) return // destino/arrastre de otra columna: deja pasar a la celda
     event.preventDefault()
     event.stopPropagation()
     const ids = dragIds.current
@@ -224,7 +219,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     }
     // Soltar algo sobre un miembro de la pila abierta lo añade a la pila al final.
     if (!carriesPosts(event)) return
-    if (!canStackOn(member.status) || !isStackBand(event)) return
+    if (!canStackOn(member.status)) return
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
@@ -341,7 +336,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
             const ContentIcon = post.contentType === 'reel' ? Film : post.contentType === 'carousel' ? Images : FileText
             const memberSelected = stackMembers ? stackMembers.every(id => selected.has(id)) : selected.has(post.id)
             const memberSomeSelected = stackMembers ? stackMembers.some(id => selected.has(id)) : memberSelected
-            const cardClass = `board-card${memberSelected ? ' selected' : ''}${pickedPostIds.has(post.id) ? ' session-picked' : ''}${post.color !== postColors[0].value ? ' has-custom-color' : ''}${stackMembers ? ' board-stack-card' : ''}${stackMembers?.some(id => dragging.has(id)) || dragging.has(post.id) ? ' is-dragging' : ''}${duplicatedPostId === post.id || justPastedIds.has(post.id) ? ' just-duplicated' : ''}${stack && stackDropTarget === post.id ? ' stack-drop-target' : ''}`
+            const cardClass = `board-card${memberSelected ? ' selected' : ''}${pickedPostIds.has(post.id) ? ' session-picked' : ''}${post.color !== postColors[0].value ? ' has-custom-color' : ''}${stackMembers ? ' board-stack-card' : ''}${stackMembers?.some(id => dragging.has(id)) || dragging.has(post.id) ? ' is-dragging' : ''}${duplicatedPostId === post.id || justPastedIds.has(post.id) ? ' just-duplicated' : ''}`
             return <article
               data-area-select-id={post.id}
               tabIndex={0}
@@ -406,6 +401,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
                 <span className="board-stack-member-color" style={{ backgroundColor: member.color }} aria-hidden="true" />
                 <span className="board-stack-member-title">{member.title || 'Publicación sin título'}</span>
                 {member.scheduledAt && <span className="board-stack-member-date"><CalendarDays size={11} aria-hidden="true" />{format(parseISO(member.scheduledAt), 'd MMM', { locale: es })}</span>}
+                <button type="button" className="board-stack-member-unstack" aria-label={`Sacar de la pila: ${member.title || 'publicación'}`} title="Sacar de la pila" onClick={event => { event.stopPropagation(); void runWithErrorReporting(() => usePlanner.getState().unstackPost(member.id), 'No se pudo desapilar') }}><X size={13} /></button>
               </div>)}
             </div>
           }
@@ -428,9 +424,12 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
           >
             {visibleRenderItems.map(item => {
               const top = item.items[0]
-              if (!item.stackId) return <div className="board-card-slot" key={top.id}>{renderPostArticle(top)}</div>
+              if (!item.stackId) return <div className={`board-card-slot board-stack-slot${stackDropTarget === top.id ? ' stack-drop-target' : ''}`} key={top.id}>
+                {stackDropTarget === top.id && <><div className="board-stack-layer board-stack-layer-1" aria-hidden="true" /><div className="board-stack-layer board-stack-layer-2" aria-hidden="true" /></>}
+                {renderPostArticle(top)}
+              </div>
               if (expandedStacks.has(item.stackId)) return <div className="board-card-slot board-stack-slot expanded" key={item.key}>{renderStackExpanded(item.items, item.stackId)}</div>
-              return <div className="board-card-slot board-stack-slot" key={item.key}>
+              return <div className={`board-card-slot board-stack-slot${stackDropTarget === top.id ? ' stack-drop-target' : ''}`} key={item.key}>
                 <div className="board-stack-layer board-stack-layer-1" aria-hidden="true" />
                 <div className="board-stack-layer board-stack-layer-2" aria-hidden="true" />
                 {renderPostArticle(top, { memberIds: item.items.map(member => member.id), count: item.items.length })}
