@@ -1,0 +1,108 @@
+.note-reminder-anchor {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.note-reminder,
+.note-reminder * {
+  -webkit-app-region: no-drag;
+}
+
+.note-reminder {
+  position: absolute;
+  z-index: 900;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 290px;
+  padding: 10px;
+  border: 1px solid #8a6d2f;
+  border-radius: 6px;
+  background: #2b2518;
+  color: #f2e6c8;
+  box-shadow: 0 14px 34px #0009;
+  animation: note-reminder-drop .22s ease-out;
+}
+
+@keyframes note-reminder-drop {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-reminder { animation: none; }
+}
+
+.note-reminder header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+
+.note-reminder header strong {
+  color: #f0d38a;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 1.1px;
+}
+
+.note-reminder header .icon-button {
+  width: 22px;
+  height: 22px;
+  color: #cfbd8e;
+}
+
+.note-reminder textarea {
+  width: 100%;
+  min-height: 62px;
+  padding: 7px 8px;
+  border: 1px solid #6d5b30;
+  border-radius: 4px;
+  background: #1f1b13;
+  color: #f6ecd2;
+  font: 11px/1.5 inherit;
+  resize: vertical;
+  -webkit-app-region: no-drag;
+}
+
+.note-reminder textarea:focus {
+  outline: 1px solid #d0a64b;
+}
+
+.note-reminder-hint {
+  margin: 6px 0 8px;
+  color: #c4b88f;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.note-reminder footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.note-reminder footer button {
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 4px;
+  font-size: 9px;
+}
+
+.note-reminder .note-reminder-ignore {
+  border: 1px solid #6d5b30;
+  background: transparent;
+  color: #d9c99c;
+  cursor: pointer;
+}
+
+.note-reminder .note-reminder-ignore:hover {
+  background: #3a3120;
+}
+
+.note-reminder .save-button {
+  min-height: 28px;
+  height: 28px;
+}
