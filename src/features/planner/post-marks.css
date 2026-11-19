@@ -1,0 +1,46 @@
+.board-card-marks {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.board-card-marks > span {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  border: 1px solid #354039;
+  border-radius: 3px;
+  font: 500 8px 'DM Mono', monospace;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.board-card-marks .board-date-mark {
+  border-color: #665533;
+  background: #211e17;
+  color: #d4b975;
+}
+
+.board-card-marks .board-interest-mark {
+  border-color: #34513d;
+  background: #19251d;
+  color: #9bd1a7;
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+
+.board-card-marks .board-interest-mark.level-2 {
+  border-color: #477653;
+  color: #bce5c4;
+}
+
+.board-card-marks .board-interest-mark.level-3 {
+  border-color: #d0a64b;
+  background: #29251b;
+  color: #f0d38a;
+}

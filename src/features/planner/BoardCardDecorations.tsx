@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Smartphone } from 'lucide-react'
+import { CalendarClock, Smartphone } from 'lucide-react'
 import { postColors } from '../../shared/postColors'
+import { formatElapsedSince, formatMarkedAt, interestLevelLabels, interestLevelNames, type PostInterestLevel } from '../../shared/post-marks'
 import type { Post } from '../../shared/types'
+import './post-marks.css'
 
 export type BoardCardDetailLevel = 'hidden' | 'discreet' | 'full'
 export type MobilePublicationProgress = { destinations: number; awaitingConfirmation: number; used: number; retirementPending: number }
@@ -147,5 +149,32 @@ export function BoardCardColorPicker({ post, onColor }: { post: Post; onColor(co
       {postColors.map(color => <button type="button" key={color.value} aria-label={color.label} title={color.label} aria-pressed={post.color === color.value} style={{ backgroundColor: color.value }} onClick={() => { onColor(color.value); setOpen(false) }} />)}
       <button type="button" className="board-card-color-reset" aria-label="Usar color predeterminado" title="Color predeterminado" aria-pressed={post.color === defaultColor} onClick={() => { onColor(defaultColor); close() }}>Predeterminado</button>
     </div>, document.body)}
+  </div>
+}
+
+// Un solo temporizador para todas las insignias del tablero, no uno por tarjeta.
+const clockListeners = new Set<() => void>()
+let clockTimer: number | undefined
+function subscribeClock(listener: () => void) {
+  clockListeners.add(listener)
+  if (clockTimer === undefined) clockTimer = window.setInterval(() => { for (const notify of clockListeners) notify() }, 60_000)
+  return () => {
+    clockListeners.delete(listener)
+    if (!clockListeners.size && clockTimer !== undefined) { window.clearInterval(clockTimer); clockTimer = undefined }
+  }
+}
+function useNow() {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => subscribeClock(() => setNow(Date.now())), [])
+  return now
+}
+
+/** Insignias personales de la tarjeta: tiempo desde la fecha registrada y destacado. */
+export function PostMarkBadges({ dateMark, interestLevel }: { dateMark?: string; interestLevel?: PostInterestLevel }) {
+  const now = useNow()
+  if (!dateMark && !interestLevel) return null
+  return <div className="board-card-marks">
+    {dateMark && <span className="board-date-mark" title={formatMarkedAt(dateMark, now)}><CalendarClock size={11} /><span>{formatElapsedSince(dateMark, now)}</span></span>}
+    {interestLevel && <span className={`board-interest-mark level-${interestLevel}`} title={`Destacado: ${interestLevelLabels[interestLevel]} · ${interestLevelNames[interestLevel]}`}>{interestLevelLabels[interestLevel]}</span>}
   </div>
 }

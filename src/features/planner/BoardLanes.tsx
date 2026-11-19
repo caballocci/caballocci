@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { MobileCardStatus, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
+import { MobileCardStatus, PostMarkBadges, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
 import { StackClosedCard, StackExpandedList, type StackHandlers } from './BoardStacks'
 import { withClipboardPayload } from '../../shared/clipboard-payload'
 import { BoardContextMenu, BoardContextSelectionActions } from './BoardContextMenu'
@@ -10,9 +10,10 @@ import { PasteFormatHint } from './PasteFormatHint'
 import { availableParsedFields, groupPayloadPosts, isStructuredPostText, parsePostsFromText, readClipboardPayload, type ClipboardPasteSource, type ClipboardPostField, type ParsedPost } from '../../shared/clipboard-payload'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers3, MoreHorizontal, Network, Plus, Replace, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, CalendarClock, CalendarDays, ChevronDown, ChevronRight, ChevronsRight, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers3, MoreHorizontal, Network, Plus, Replace, Trash2 } from 'lucide-react'
 import { contentLabels, stages, statusMeta } from '../../shared/constants'
 import { postColors } from '../../shared/postColors'
+import { interestLevelLabels, interestLevelNames, type PostInterestLevel } from '../../shared/post-marks'
 import { runWithErrorReporting } from '../../app/errors'
 import { usePlanner } from '../../app/store'
 import { PlatformMark } from '../../components/layout/AppShell'
@@ -63,6 +64,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
   const [statusMenu, setStatusMenu] = useState<{ status: PostStatus; x: number; y: number } | null>(null)
   const [showStatuses, setShowStatuses] = useState(false)
   const [showColors, setShowColors] = useState(false)
+  const [showInterest, setShowInterest] = useState(false)
   const [copyPosts, setCopyPosts] = useState<Post[]>([])
   const [pastePreview, setPastePreview] = useState(0)
   const [pasteSource, setPasteSource] = useState<ClipboardPasteSource>('freeform')
@@ -97,6 +99,8 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
   const showBand = lanes.length > 1
   const CELL_LIMIT = 8
   const postById = new Map(posts.map(post => [post.id, post]))
+  const dateMarks = usePlanner(state => state.postDateMarks)
+  const interestLevels = usePlanner(state => state.postInterestLevels)
   const statusIds = new Map(stages.map(status => [status, posts.filter(post => post.status === status).map(post => post.id)]))
 
   const resetDrag = useCallback(() => {
@@ -122,7 +126,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
 
   useEffect(() => {
     if (!context) return
-    const dismiss = () => { setContext(null); setShowStatuses(false); setShowColors(false) }
+    const dismiss = () => { setContext(null); setShowStatuses(false); setShowColors(false); setShowInterest(false) }
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss() }
     document.addEventListener('pointerdown', dismiss)
     document.addEventListener('keydown', onKeyDown)
@@ -335,6 +339,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     event.stopPropagation()
     setShowStatuses(false)
     setShowColors(false)
+    setShowInterest(false)
     setStatusMenu(null)
     // En una pila, el menú contextual actúa sobre toda la pila; si no, sobre la selección o la publicación.
     const ids = stackIds ?? (selected.has(post.id) ? [...selected] : [post.id])
@@ -485,6 +490,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
                 {post.scheduledAt && <small className={overdue ? 'overdue' : ''} title={format(parseISO(post.scheduledAt), 'd MMMM yyyy · HH:mm', { locale: es })}>
                   <CalendarDays size={12} /><span>{format(parseISO(post.scheduledAt), 'd MMM', { locale: es })}</span><time dateTime={post.scheduledAt}>{format(parseISO(post.scheduledAt), 'HH:mm')}</time>{overdue && <b>Atrasada</b>}
                 </small>}
+                {(dateMarks[post.id] || interestLevels[post.id]) && <PostMarkBadges dateMark={dateMarks[post.id]} interestLevel={interestLevels[post.id]} />}
               </div>
             </article>
           }
@@ -513,7 +519,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
                 {stackDropTarget === top.id && <><div className="board-stack-layer board-stack-layer-1" aria-hidden="true" /><div className="board-stack-layer board-stack-layer-2" aria-hidden="true" /></>}
                 {renderPostArticle(top)}
               </div>
-              if (expandedStacks.has(item.stackId)) return <div className="board-card-slot board-stack-slot expanded" key={item.key} style={{ viewTransitionName: stackViewName }}><StackExpandedList items={item.items} stackId={item.stackId} columnStatus={status} selected={selected} dragging={dragging} mobilePublicationState={mobilePublicationState} boardCardDetailLevel={boardCardDetailLevel} containerTarget={stackContainerTarget === item.stackId} dropTarget={stackDropTarget} reorder={stackReorder} handlers={stackHandlers} /></div>
+              if (expandedStacks.has(item.stackId)) return <div className="board-card-slot board-stack-slot expanded" key={item.key} style={{ viewTransitionName: stackViewName }}><StackExpandedList items={item.items} stackId={item.stackId} columnStatus={status} selected={selected} dragging={dragging} dateMarks={dateMarks} interestLevels={interestLevels} mobilePublicationState={mobilePublicationState} boardCardDetailLevel={boardCardDetailLevel} containerTarget={stackContainerTarget === item.stackId} dropTarget={stackDropTarget} reorder={stackReorder} handlers={stackHandlers} /></div>
               // Las capas de atrás usan el color de los miembros 2 y 3 (si tienen uno propio), y su cantidad refleja el tamaño real.
               const layerColor1 = item.items[1] && item.items[1].color !== postColors[0].value ? item.items[1].color : undefined
               const layerColor2 = item.items[2] && item.items[2].color !== postColors[0].value ? item.items[2].color : undefined
@@ -524,7 +530,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
               >
                 {item.items.length >= 2 && <div className="board-stack-layer board-stack-layer-1" aria-hidden="true" />}
                 {item.items.length >= 3 && <div className="board-stack-layer board-stack-layer-2" aria-hidden="true" />}
-                <StackClosedCard items={item.items} stackId={item.stackId} columnStatus={status} selected={selected} dragging={dragging} mobilePublicationState={mobilePublicationState} boardCardDetailLevel={boardCardDetailLevel} handlers={stackHandlers} />
+                <StackClosedCard items={item.items} stackId={item.stackId} columnStatus={status} selected={selected} dragging={dragging} dateMarks={dateMarks} interestLevels={interestLevels} mobilePublicationState={mobilePublicationState} boardCardDetailLevel={boardCardDetailLevel} handlers={stackHandlers} />
               </div>
             })}
             {!columnPosts.length && <div className="board-drop-hint">{inDropColumn ? 'Soltá acá' : 'Arrastrá una publicación acá'}</div>}
@@ -537,6 +543,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
   {context && (() => {
     const actionIds = context.ids
     const hasScheduledPosts = actionIds.some(id => postById.get(id)?.scheduledAt)
+    const hasDateMarks = actionIds.some(id => dateMarks[id])
     const close = () => setContext(null)
     return <BoardContextMenu x={context.x} y={context.y} label={`Acciones para ${context.post.title || 'publicación'}`}>
       <BoardContextSelectionActions
@@ -553,6 +560,13 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
       />
       <button type="button" role="menuitem" onClick={() => { onSelect(context.post.id); close() }}>{actionIds.length > 1 ? 'Editar esta publicación' : 'Abrir / editar publicación'}</button>
       <button type="button" role="menuitem" onClick={() => { usePlanner.getState().requestConceptMapPosts(actionIds); close() }}><Network size={14} />Referenciar en mapa conceptual{actionIds.length > 1 ? ` (${actionIds.length})` : ''}</button>
+      <button type="button" role="menuitem" onClick={() => { usePlanner.getState().markPostsDate(actionIds); close() }}><CalendarClock size={14} />Registrar fecha{actionIds.length > 1 ? ` (${actionIds.length})` : ''}</button>
+      {hasDateMarks && <button type="button" role="menuitem" onClick={() => { usePlanner.getState().clearPostsDateMark(actionIds); close() }}><CalendarClock size={14} />Quitar fecha registrada</button>}
+      <button type="button" role="menuitem" aria-expanded={showInterest} onClick={() => setShowInterest(value => !value)}><ChevronsRight size={14} />Destacar…</button>
+      {showInterest && <div className="board-context-statuses" role="group" aria-label="Destacar">
+        {([1, 2, 3] as PostInterestLevel[]).map(level => <button type="button" role="menuitem" key={level} onClick={() => { usePlanner.getState().setPostsInterest(actionIds, level); close() }}>{interestLevelLabels[level]} · {interestLevelNames[level]}</button>)}
+        <button type="button" role="menuitem" onClick={() => { usePlanner.getState().setPostsInterest(actionIds, null); close() }}>Sin destacar</button>
+      </div>}
       {actionIds.length > 1 && <button type="button" role="menuitem" onClick={() => { onEditSelection(); close() }}>Editar selección en pestañas</button>}
       <button type="button" role="menuitem" onClick={() => { void duplicatePost(context.post); close() }}><Copy size={14} />Duplicar publicación</button>
       <button type="button" role="menuitem" onClick={() => { void runWithErrorReporting(() => window.planner.media.openFolder(context.post.id, context.post.project), 'No se pudo abrir la carpeta de media'); close() }}><FolderOpen size={14} />Abrir en el Explorador Windows</button>
