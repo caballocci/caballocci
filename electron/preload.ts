@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('planner', {
     list: () => ipcRenderer.invoke('posts:list'),
     save: (post: unknown) => ipcRenderer.invoke('posts:save', post),
     remove: (id: string) => ipcRenderer.invoke('posts:remove', id),
-    reassignProject: (fromProject: string, toProject: string) => ipcRenderer.invoke('posts:reassign-project', fromProject, toProject),
+    reassignProject: (fromProject: string, toProject: string, options?: { keepStacks?: boolean }) => ipcRenderer.invoke('posts:reassign-project', fromProject, toProject, options?.keepStacks),
     uncombine: (id: string) => ipcRenderer.invoke('posts:uncombine', id),
   },
   workGroups: {
@@ -141,7 +141,7 @@ contextBridge.exposeInMainWorld('planner', {
     imageUrl: (id: string) => `caballocci-media://asset/${encodeURIComponent(id)}`,
   },
   files: { readText: () => ipcRenderer.invoke('files:read-text') },
-  clipboard: { write: (text: string) => ipcRenderer.invoke('clipboard:write', text) },
+  clipboard: { write: (text: string, html?: string) => ipcRenderer.invoke('clipboard:write', text, html), readHtml: () => ipcRenderer.invoke('clipboard:read-html'), readText: () => ipcRenderer.invoke('clipboard:read-text') },
   preferences: { sync: (entries: Record<string, string>) => ipcRenderer.invoke('preferences:sync', entries), remove: (key: string) => ipcRenderer.invoke('preferences:remove', key) },
   system: {
     info: () => ipcRenderer.invoke('system:info'),
@@ -163,6 +163,8 @@ contextBridge.exposeInMainWorld('planner', {
     openSyncthingUi: (url: string) => ipcRenderer.invoke('system:open-syncthing-ui', url),
     openMobileAppDownload: () => ipcRenderer.invoke('system:open-mobile-app-download'),
     createBackup: () => ipcRenderer.invoke('system:create-backup'),
+    getBehavior: () => ipcRenderer.invoke('settings:get-behavior'),
+    setBehavior: (behavior: { closeToTray?: boolean; autostart?: boolean }) => ipcRenderer.invoke('settings:set-behavior', behavior),
   },
   updates: {
     getState: () => ipcRenderer.invoke('updates:get-state'),

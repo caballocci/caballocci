@@ -24,6 +24,7 @@ export function useBoardWorkGroups({ allPosts, workGroups, activeSpace, selected
   const [membershipTargetGroupId, setMembershipTargetGroupId] = useState('')
   const [groupFormOpen, setGroupFormOpen] = useState(false)
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
+  const [formParentId, setFormParentId] = useState<string | null>(null)
   const [groupName, setGroupName] = useState('')
   const [groupDescription, setGroupDescription] = useState('')
   const [savingGroup, setSavingGroup] = useState(false)
@@ -39,8 +40,9 @@ export function useBoardWorkGroups({ allPosts, workGroups, activeSpace, selected
     setGroupPostsToDelete([])
   }, [pendingGroupAction?.group.id])
 
-  const openGroupForm = (group?: WorkGroup | null) => {
+  const openGroupForm = (group?: WorkGroup | null, parent?: WorkGroup | null) => {
     setEditingGroupId(group?.id || null)
+    setFormParentId(group ? group.parentId : parent?.id ?? null)
     setGroupName(group?.name || '')
     setGroupDescription(group?.description || '')
     setGroupFormOpen(true)
@@ -53,18 +55,22 @@ export function useBoardWorkGroups({ allPosts, workGroups, activeSpace, selected
       setSavingGroup(true)
       try {
         const existingGroup = editingGroupId ? workGroups.find(item => item.id === editingGroupId) : null
+        const parentGroup = !editingGroupId && formParentId ? workGroups.find(item => item.id === formParentId) : null
         const selectedProjects = new Set([...selected].map(id => allPosts.find(post => post.id === id)?.project).filter((project): project is string => project !== undefined))
-        const groupSpace = existingGroup?.space ?? activeSpace ?? (selectedProjects.size === 1 ? [...selectedProjects][0] : '')
+        const groupSpace = existingGroup?.space ?? parentGroup?.space ?? activeSpace ?? (selectedProjects.size === 1 ? [...selectedProjects][0] : '')
         const group = await saveWorkGroup({
           ...(editingGroupId ? { id: editingGroupId } : {}),
           name: groupName.trim(),
           description: groupDescription.trim(),
           space: groupSpace,
+          parentId: editingGroupId ? existingGroup?.parentId ?? null : formParentId,
         })
         if (!editingGroupId && selected.size) await setWorkGroupPosts(group.id, [...selected], { recordHistory: false })
-        setActiveWorkGroup(group.id)
+        // Stay at the current level when creating a subcollection: entering it left the board showing only a back button and a "+", which looked like creation was broken.
+        if (!formParentId) setActiveWorkGroup(group.id)
         setMembershipTargetGroupId(group.id)
         setGroupFormOpen(false)
+        setFormParentId(null)
         clear()
       } finally {
         setSavingGroup(false)
@@ -164,9 +170,14 @@ export function useBoardWorkGroups({ allPosts, workGroups, activeSpace, selected
     }
   }
 
+  const formParentName = (() => {
+    const parentId = editingGroupId ? workGroups.find(item => item.id === editingGroupId)?.parentId ?? null : formParentId
+    return parentId ? workGroups.find(item => item.id === parentId)?.name ?? null : null
+  })()
+
   return {
     membershipTargetGroupId, setMembershipTargetGroupId,
-    groupFormOpen, setGroupFormOpen, editingGroupId,
+    groupFormOpen, setGroupFormOpen, editingGroupId, formParentName,
     groupName, setGroupName, groupDescription, setGroupDescription,
     savingGroup, pendingGroupAction, setPendingGroupAction,
     groupDeleteMode, setGroupDeleteMode, groupPostsToDelete, setGroupPostsToDelete,

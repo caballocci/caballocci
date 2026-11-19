@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { Idea, IdeaAnalysisOptions, IdeaAnalysisProgress, IdeaCluster, IdeaInput, IdeaNeighbor, Post, PostInput, PostStatus, WorkGroup, WorkGroupInput } from '../shared/types'
+import type { ConceptMapLink, ConceptMapNode, Idea, IdeaAnalysisOptions, IdeaAnalysisProgress, IdeaCluster, IdeaInput, IdeaNeighbor, Post, PostInput, PostStatus, WorkGroup, WorkGroupInput } from '../shared/types'
+import { subtreeGroupIds } from '../shared/work-group-tree'
 
 export type PlannerView = 'timeline' | 'calendar' | 'board' | 'concept-map' | 'ideas' | 'library' | 'sources' | 'about'
 
@@ -9,11 +10,14 @@ export interface QuickWrite {
   text: string
 }
 
+type ConceptMapState = { nodes: ConceptMapNode[]; links: ConceptMapLink[] }
+type ConceptMapSnapshot = ConceptMapState & { nodeIds: string[]; linkIds: string[] }
 type WorkspaceUndoLeaf =
-  | { kind: 'post'; id: string; before: Post | null; after: Post | null; label: string }
-  | { kind: 'idea'; id: string; before: Idea | null; after: Idea | null; label: string }
-  | { kind: 'group'; id: string; before: WorkGroup | null; after: WorkGroup | null; label: string }
-type WorkspaceUndoAction = WorkspaceUndoLeaf | { kind: 'batch'; actions: WorkspaceUndoLeaf[]; label: string }
+  | { kind: 'post'; id: string; before: Post | null; after: Post | null; label: string; view: PlannerView }
+  | { kind: 'idea'; id: string; before: Idea | null; after: Idea | null; label: string; view: PlannerView }
+  | { kind: 'group'; id: string; before: WorkGroup | null; after: WorkGroup | null; label: string; view: PlannerView }
+  | { kind: 'concept-map'; before: ConceptMapSnapshot; after: ConceptMapSnapshot; label: string; view: 'concept-map' }
+type WorkspaceUndoAction = WorkspaceUndoLeaf | { kind: 'batch'; actions: WorkspaceUndoLeaf[]; label: string; view: PlannerView }
 
 export function postMatchesQuery(post: Post, query: string) {
   const normalized = query.trim().toLocaleLowerCase()
@@ -44,18 +48,23 @@ interface PlannerState {
   view: PlannerView
   selectedId: string | null
   selectedIdeaId: string | null
+  pendingConceptMapPostId: string | null
   query: string
   activeSpace: string | null
   customSpaces: string[]
   hiddenSpaces: string[]
   load(): Promise<void>
-  save(post: PostInput, options?: { recordHistory?: boolean }): Promise<Post>
+  save(post: PostInput, options?: { recordHistory?: boolean; keepStack?: boolean }): Promise<Post>
+  stackPosts(targetId: string, ids: string[], options?: { recordHistory?: boolean }): Promise<void>
+  unstackPost(id: string, options?: { recordHistory?: boolean }): Promise<void>
+  reorderStack(stackId: string, orderedIds: string[], options?: { recordHistory?: boolean }): Promise<void>
+  moveWithStacks(ids: string[], status: PostStatus, options?: { groupLabel?: string; recordHistory?: boolean }): Promise<void>
   saveWorkGroup(group: WorkGroupInput, options?: { recordHistory?: boolean }): Promise<WorkGroup>
   setWorkGroupPosts(id: string, postIds: string[], options?: { recordHistory?: boolean }): Promise<WorkGroup>
   setWorkGroupArchived(id: string, archived: boolean, options?: { recordHistory?: boolean }): Promise<WorkGroup>
   removeWorkGroup(id: string, options?: { recordHistory?: boolean }): Promise<void>
   remove(id: string, options?: { recordHistory?: boolean }): Promise<void>
-  move(id: string, status: PostStatus): Promise<void>
+  move(id: string, status: PostStatus, options?: { recordHistory?: boolean; keepStack?: boolean }): Promise<void>
   movePostsToSpace(postIds: string[], space: string): Promise<number>
   saveIdea(idea: IdeaInput, options?: { recordHistory?: boolean }): Promise<Idea>
   saveIdeasMany(ideas: IdeaInput[]): Promise<{ created: Idea[]; skipped: number; duplicates: Array<{ title: string; sourceName: string; existingId: string; existingTitle: string; existingSourceName: string }> }>
@@ -67,6 +76,7 @@ interface PlannerState {
   redoSavedChange(): Promise<void>
   groupRecentUndoActions(count: number, label: string): void
   clearUndoNotice(): void
+  recordConceptMapChange(before: { nodes: ConceptMapNode[]; links: ConceptMapLink[] }, after: { nodes: ConceptMapNode[]; links: ConceptMapLink[] }, label: string): void
   ideaNeighbors(id: string, limit?: number, ignoredTerms?: string[], options?: IdeaAnalysisOptions): Promise<IdeaNeighbor[]>
   refreshEmbeddings(ids?: string[], ignoredTerms?: string[], options?: IdeaAnalysisOptions): Promise<{ updated: number; model: string; modelVersion: string }>
   proposeClusters(threshold?: number, ignoredTerms?: string[], options?: IdeaAnalysisOptions, ideaIds?: string[], onProgress?: (progress: IdeaAnalysisProgress) => void): Promise<IdeaCluster[]>
@@ -75,6 +85,8 @@ interface PlannerState {
   setView(view: PlannerView): void
   select(id: string | null): void
   selectIdea(id: string | null): void
+  requestConceptMapPost(id: string): void
+  clearConceptMapPostRequest(): void
   setQuery(query: string): void
   setActiveSpace(space: string | null): void
   setActiveWorkGroup(id: string | null): void
@@ -144,8 +156,34 @@ function pushUndo(history: WorkspaceUndoAction[], action: WorkspaceUndoAction) {
   return [...history.slice(-99), action]
 }
 
+/** Renumera los miembros de una pila a 0..n-1; si queda uno solo, lo desapila. */
+async function renumberStackMembers(get: () => PlannerState, stackId: string) {
+  const members = get().posts.filter(item => item.stackId === stackId).sort((a, b) => (a.stackPosition ?? 0) - (b.stackPosition ?? 0))
+  for (let index = 0; index < members.length; index += 1) {
+    const member = members[index]
+    if (members.length === 1) {
+      if (member.stackId !== null || member.stackPosition !== null) await get().save({ ...member, stackId: null, stackPosition: null })
+      continue
+    }
+    if (member.stackPosition !== index) await get().save({ ...member, stackPosition: index })
+  }
+}
+
+async function applyConceptMapSnapshot(snapshot: ConceptMapSnapshot) {
+  const current = await window.planner.conceptMap.list()
+  const nodeIds = new Set(snapshot.nodeIds)
+  const linkIds = new Set(snapshot.linkIds)
+  const targetNodes = new Map(snapshot.nodes.map(node => [node.id, node]))
+  const targetLinks = new Map(snapshot.links.map(link => [link.id, link]))
+  for (const node of snapshot.nodes) await window.planner.conceptMap.saveNode({ id: node.id, folderId: node.folderId, kind: node.kind, sourceId: node.sourceId, title: node.title, body: node.body, x: node.x, y: node.y })
+  for (const link of current.links) if (linkIds.has(link.id) && !targetLinks.has(link.id)) await window.planner.conceptMap.removeLink(link.id)
+  for (const node of current.nodes) if (nodeIds.has(node.id) && !targetNodes.has(node.id)) await window.planner.conceptMap.removeNode(node.id)
+  for (const link of snapshot.links) await window.planner.conceptMap.saveLink({ id: link.id, fromNodeId: link.fromNodeId, toNodeId: link.toNodeId, relation: link.relation })
+}
+
 function actionReferencesPost(action: WorkspaceUndoAction, id: string): boolean {
   if (action.kind === 'batch') return action.actions.some(item => actionReferencesPost(item, id))
+  if (action.kind === 'concept-map') return [...action.before.nodes, ...action.after.nodes].some(node => node.kind === 'post' && node.sourceId === id)
   if (action.kind === 'post') return action.id === id
   if (action.kind === 'idea') return false
   return Boolean(action.before?.postIds.includes(id) || action.after?.postIds.includes(id))
@@ -153,6 +191,7 @@ function actionReferencesPost(action: WorkspaceUndoAction, id: string): boolean 
 
 function actionReferencesIdea(action: WorkspaceUndoAction, id: string): boolean {
   if (action.kind === 'batch') return action.actions.some(item => actionReferencesIdea(item, id))
+  if (action.kind === 'concept-map') return [...action.before.nodes, ...action.after.nodes].some(node => node.kind === 'idea' && node.sourceId === id)
   if (action.kind === 'idea') return action.id === id
   return action.kind === 'post' && (action.before?.sourceIdeaId === id || action.after?.sourceIdeaId === id)
 }
@@ -170,6 +209,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   view: 'timeline',
   selectedId: null,
   selectedIdeaId: null,
+  pendingConceptMapPostId: null,
   query: '',
   activeSpace: null,
   customSpaces: readStoredSpaces(),
@@ -182,9 +222,16 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   spaceKeys: (() => { try { return JSON.parse(localStorage.getItem('caballocci.space-keys') || '{}') as Record<string, string> } catch { return {} } })(),
   spaceKey: (space) => get().spaceKeys[space] || space,
   load: async () => {
+    let watchdog: number | undefined
     try {
       if (!window.planner) throw new Error('La API de Electron no esta disponible. Inicia la aplicacion con npm.cmd run dev.')
-      const [posts, ideas, workGroups] = await Promise.all([window.planner.posts.list(), window.planner.ideas.list(), window.planner.workGroups.list()])
+      const timeout = new Promise<never>((_resolve, reject) => {
+        watchdog = window.setTimeout(() => reject(new Error('El workspace esta tardando demasiado en responder. Cierra los programas que esten saturando el disco y pulsa Reintentar.')), 120_000)
+      })
+      const [posts, ideas, workGroups] = await Promise.race([
+        Promise.all([window.planner.posts.list(), window.planner.ideas.list(), window.planner.workGroups.list()]),
+        timeout,
+      ])
       set(state => ({
         posts,
         ideas,
@@ -197,17 +244,22 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       }))
     } catch (error) {
       set({ loading: false, loadError: error instanceof Error ? error.message : 'No se pudo cargar el workspace local.' })
+    } finally {
+      window.clearTimeout(watchdog)
     }
   },
   save: async (post, options) => {
+    const sourceView = get().view
     const before = get().posts.find(item => item.id === post.id) || null
     const historyStart = get().undoHistory.length
-    const saved = await window.planner.posts.save(post)
+    const statusChanged = Boolean(before && (before.status !== post.status || before.project !== post.project))
+    const stackExit = Boolean(statusChanged && before?.stackId && !options?.keepStack)
+    const saved = await window.planner.posts.save(stackExit ? { ...post, stackId: null, stackPosition: null } : post)
     set(state => {
       const changed = JSON.stringify(before) !== JSON.stringify(saved)
       return {
         posts: state.posts.some(item => item.id === saved.id) ? state.posts.map(item => item.id === saved.id ? saved : item) : [...state.posts, saved],
-        undoHistory: options?.recordHistory === false || !changed ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'post', id: saved.id, before, after: saved, label: before ? postChangeLabel(before, saved) : 'Crear publicación' }),
+        undoHistory: options?.recordHistory === false || !changed ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'post', id: saved.id, before, after: saved, label: before ? postChangeLabel(before, saved) : 'Crear publicación', view: sourceView }),
         redoHistory: options?.recordHistory === false || !changed ? state.redoHistory : [],
         undoNotice: null,
       }
@@ -217,8 +269,12 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       for (const group of groups) {
         await get().setWorkGroupPosts(group.id, group.postIds.filter(id => id !== saved.id), { recordHistory: options?.recordHistory === false ? false : undefined })
       }
-      const actionCount = get().undoHistory.length - historyStart
-      if (options?.recordHistory !== false && actionCount > 1) get().groupRecentUndoActions(actionCount, 'Mover publicación a otro espacio')
+    }
+    if (stackExit && before?.stackId) await renumberStackMembers(get, before.stackId)
+    const actionCount = get().undoHistory.length - historyStart
+    if (options?.recordHistory !== false && actionCount > 1) {
+      if (stackExit) get().groupRecentUndoActions(actionCount, 'Mover publicación fuera de la pila')
+      else if (before && before.project !== saved.project) get().groupRecentUndoActions(actionCount, 'Mover publicación a otro espacio')
     }
     return saved
   },
@@ -236,13 +292,14 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     return moved
   },
   saveWorkGroup: async (group, options) => {
+    const sourceView = get().view
     const before = get().workGroups.find(item => item.id === group.id) || null
     const saved = await window.planner.workGroups.save(group)
     set(state => {
       const top = state.undoHistory.at(-1)
       const history = options?.recordHistory === false && top?.kind === 'group' && top.id === saved.id
         ? [...state.undoHistory.slice(0, -1), { ...top, after: saved }]
-        : options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: before ? 'Editar colección' : 'Crear colección' })
+        : options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: before ? 'Editar colección' : 'Crear colección', view: sourceView })
       return {
       workGroups: [...state.workGroups.filter(item => item.id !== saved.id), saved],
       undoHistory: history,
@@ -253,13 +310,14 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     return saved
   },
   setWorkGroupPosts: async (id, postIds, options) => {
+    const sourceView = get().view
     const before = get().workGroups.find(item => item.id === id) || null
     const saved = await window.planner.workGroups.setPosts(id, postIds)
     set(state => {
       const top = state.undoHistory.at(-1)
       const history = options?.recordHistory === false && top?.kind === 'group' && top.id === saved.id
         ? [...state.undoHistory.slice(0, -1), { ...top, after: saved }]
-        : options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: 'Cambiar publicaciones de la colección' })
+        : options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: 'Cambiar publicaciones de la colección', view: sourceView })
       return {
       workGroups: [...state.workGroups.filter(item => item.id !== saved.id), saved],
       undoHistory: history,
@@ -270,22 +328,29 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     return saved
   },
   setWorkGroupArchived: async (id, archived, options) => {
+    const sourceView = get().view
     const before = get().workGroups.find(item => item.id === id) || null
     const saved = await window.planner.workGroups.setArchived(id, archived)
+    // The backend archives/restores the whole subtree; mirror that in state and clear a selection that just became archived.
+    const subtree = subtreeGroupIds(get().workGroups, id)
+    const archivedAt = archived ? saved.archivedAt : null
     set(state => ({
-      workGroups: [...state.workGroups.filter(item => item.id !== saved.id), saved], activeWorkGroupId: archived && state.activeWorkGroupId === id ? null : state.activeWorkGroupId,
-      undoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: archived ? 'Archivar colección' : 'Restaurar colección' }),
+      workGroups: state.workGroups.map(group => subtree.has(group.id) ? { ...group, archivedAt } : group), activeWorkGroupId: archived && state.activeWorkGroupId && subtree.has(state.activeWorkGroupId) ? null : state.activeWorkGroupId,
+      undoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id: saved.id, before, after: saved, label: archived ? 'Archivar colección' : 'Restaurar colección', view: sourceView }),
       redoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.redoHistory : [],
       undoNotice: null,
     }))
     return saved
   },
   removeWorkGroup: async (id, options) => {
+    const sourceView = get().view
     const before = get().workGroups.find(item => item.id === id) || null
     await window.planner.workGroups.remove(id)
+    // The backend moves subcollections up one level; keep state consistent.
+    const parentId = before?.parentId ?? null
     set(state => ({
-      workGroups: state.workGroups.filter(group => group.id !== id), activeWorkGroupId: state.activeWorkGroupId === id ? null : state.activeWorkGroupId,
-      undoHistory: options?.recordHistory === false || !before ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id, before, after: null, label: 'Eliminar colección' }),
+      workGroups: state.workGroups.filter(group => group.id !== id).map(group => group.parentId === id ? { ...group, parentId } : group), activeWorkGroupId: state.activeWorkGroupId === id ? null : state.activeWorkGroupId,
+      undoHistory: options?.recordHistory === false || !before ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'group', id, before, after: null, label: 'Eliminar colección', view: sourceView }),
       redoHistory: options?.recordHistory === false || !before ? state.redoHistory : [],
       undoNotice: null,
     }))
@@ -311,28 +376,106 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       }
     })
   },
-  move: async (id, status) => {
+  move: async (id, status, options) => {
     const post = get().posts.find((item) => item.id === id)
-    if (post) await get().save({ ...post, status })
+    if (post) await get().save({ ...post, status }, options)
+  },
+  stackPosts: async (targetId, ids, options) => {
+    const start = get().undoHistory.length
+    const target = get().posts.find(item => item.id === targetId)
+    if (!target) return
+    const stackId = target.stackId ?? crypto.randomUUID()
+    const dragged = [...new Set(ids)]
+      .map(id => get().posts.find(item => item.id === id))
+      .filter((item): item is Post => Boolean(item) && item!.id !== targetId)
+    if (!dragged.length) return
+    const inTargetStack = new Set(target.stackId ? get().posts.filter(item => item.stackId === stackId).map(item => item.id) : [targetId])
+    const newMembers = dragged.filter(item => !inTargetStack.has(item.id))
+    if (!newMembers.length) return
+    const sourceStacks = new Set(newMembers.map(item => item.stackId).filter((id): id is string => Boolean(id)))
+    const existing = target.stackId
+      ? get().posts.filter(item => item.stackId === stackId).sort((a, b) => (a.stackPosition ?? 0) - (b.stackPosition ?? 0)).map(item => item.id)
+      : [targetId]
+    const sequence = [...existing, ...newMembers.map(item => item.id)]
+    for (let index = 0; index < sequence.length; index += 1) {
+      const member = get().posts.find(item => item.id === sequence[index])
+      if (!member) continue
+      if (member.stackId === stackId && member.stackPosition === index) continue
+      await get().save({ ...member, stackId, stackPosition: index }, options)
+    }
+    for (const otherStack of sourceStacks) if (otherStack !== stackId) await renumberStackMembers(get, otherStack)
+    const count = get().undoHistory.length - start
+    if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, 'Apilar publicaciones')
+  },
+  unstackPost: async (id, options) => {
+    const post = get().posts.find(item => item.id === id)
+    if (!post?.stackId) return
+    const stackId = post.stackId
+    const start = get().undoHistory.length
+    await get().save({ ...post, stackId: null, stackPosition: null }, options)
+    await renumberStackMembers(get, stackId)
+    const count = get().undoHistory.length - start
+    if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, 'Desapilar publicación')
+  },
+  reorderStack: async (stackId, orderedIds, options) => {
+    const start = get().undoHistory.length
+    const members = get().posts.filter(item => item.stackId === stackId)
+    if (members.length < 2) return
+    const ordered = [...new Set(orderedIds.filter(id => members.some(member => member.id === id)))]
+    const rest = members.filter(member => !ordered.includes(member.id)).sort((a, b) => (a.stackPosition ?? 0) - (b.stackPosition ?? 0)).map(item => item.id)
+    const sequence = [...ordered, ...rest]
+    for (let index = 0; index < sequence.length; index += 1) {
+      const member = get().posts.find(item => item.id === sequence[index])
+      if (member && member.stackPosition !== index) await get().save({ ...member, stackPosition: index }, options)
+    }
+    const count = get().undoHistory.length - start
+    if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, 'Reordenar pila')
+  },
+  moveWithStacks: async (ids, status, options) => {
+    const start = get().undoHistory.length
+    const unique = [...new Set(ids)]
+    const posts = get().posts
+    const membersOf = new Map<string, string[]>()
+    for (const post of posts) if (post.stackId) membersOf.set(post.stackId, [...(membersOf.get(post.stackId) || []), post.id])
+    const preserved = new Set<string>()
+    for (const id of unique) {
+      const post = posts.find(item => item.id === id)
+      if (post?.stackId) {
+        const members = membersOf.get(post.stackId) || []
+        if (members.length > 1 && members.every(member => unique.includes(member))) preserved.add(id)
+      }
+    }
+    for (const id of unique) {
+      if (preserved.has(id)) {
+        const post = get().posts.find(item => item.id === id)
+        if (post) await get().save({ ...post, status }, { keepStack: true })
+      } else {
+        await get().move(id, status)
+      }
+    }
+    const count = get().undoHistory.length - start
+    if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, options?.groupLabel ?? (preserved.size ? 'Mover pila a otra columna' : `Mover ${count} ${count === 1 ? 'publicación' : 'publicaciones'}`))
   },
   saveIdea: async (idea, options) => {
+    const sourceView = get().view
     const before = get().ideas.find(item => item.id === idea.id) || null
     const saved = await window.planner.ideas.save(idea)
     set(state => ({
       ideas: [...state.ideas.filter(item => item.id !== saved.id), saved],
-      undoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'idea', id: saved.id, before, after: saved, label: before ? ideaChangeLabel(before, saved) : 'Crear idea' }),
+      undoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.undoHistory : pushUndo(state.undoHistory, { kind: 'idea', id: saved.id, before, after: saved, label: before ? ideaChangeLabel(before, saved) : 'Crear idea', view: sourceView }),
       redoHistory: options?.recordHistory === false || JSON.stringify(before) === JSON.stringify(saved) ? state.redoHistory : [],
       undoNotice: null,
     }))
     return saved
   },
   saveIdeasMany: async (ideas) => {
+    const sourceView = get().view
     const result = await window.planner.ideas.saveMany(ideas)
     set(state => {
-      const actions: WorkspaceUndoLeaf[] = result.created.map(idea => ({ kind: 'idea', id: idea.id, before: null, after: idea, label: 'Importar ideas' }))
+      const actions: WorkspaceUndoLeaf[] = result.created.map(idea => ({ kind: 'idea', id: idea.id, before: null, after: idea, label: 'Importar ideas', view: sourceView }))
       const importAction: WorkspaceUndoAction | null = !actions.length ? null : actions.length === 1
         ? { ...actions[0], label: 'Importar idea' }
-        : { kind: 'batch', actions, label: `Importar ${actions.length} ideas` }
+        : { kind: 'batch', actions, label: `Importar ${actions.length} ideas`, view: sourceView }
       return {
         ideas: [...state.ideas, ...result.created],
         undoHistory: importAction ? pushUndo(state.undoHistory, importAction) : state.undoHistory,
@@ -397,6 +540,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       } else if (item.kind === 'idea') {
         if (item.before) await get().saveIdea(item.before, { recordHistory: false })
         else await get().removeIdea(item.id, { recordHistory: false })
+      } else if (item.kind === 'concept-map') {
+        await applyConceptMapSnapshot(item.before)
       } else {
         if (item.before) {
           await get().saveWorkGroup(item.before, { recordHistory: false })
@@ -418,6 +563,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       } else if (item.kind === 'idea') {
         if (item.after) await get().saveIdea(item.after, { recordHistory: false })
         else await get().removeIdea(item.id, { recordHistory: false })
+      } else if (item.kind === 'concept-map') {
+        await applyConceptMapSnapshot(item.after)
       } else {
         if (item.after) {
           await get().saveWorkGroup(item.after, { recordHistory: false })
@@ -435,11 +582,35 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       if (!recent.length) return state
       const start = state.undoHistory.length - recent.length
       const actions = recent.flatMap(action => action.kind === 'batch' ? action.actions : [action])
-      const grouped: WorkspaceUndoAction = actions.length === 1 ? { ...actions[0], label } : { kind: 'batch', actions, label }
+      const grouped: WorkspaceUndoAction = actions.length === 1 ? { ...actions[0], label } : { kind: 'batch', actions, label, view: actions[0].view }
       return { undoHistory: [...state.undoHistory.slice(0, start), grouped] }
     })
   },
   clearUndoNotice: () => set({ undoNotice: null }),
+  recordConceptMapChange: (before, after, label) => set(state => {
+    const changedIds = <T extends { id: string }>(left: T[], right: T[]) => {
+      const leftById = new Map(left.map(item => [item.id, item]))
+      const rightById = new Map(right.map(item => [item.id, item]))
+      const signature = (item: T | undefined) => {
+        if (!item) return undefined
+        const meaningfulFields = { ...item } as T & { updatedAt?: string }
+        delete meaningfulFields.updatedAt
+        return JSON.stringify(meaningfulFields)
+      }
+      return [...new Set([...leftById.keys(), ...rightById.keys()])].filter(id => signature(leftById.get(id)) !== signature(rightById.get(id)))
+    }
+    const nodeIds = changedIds(before.nodes, after.nodes)
+    const linkIds = changedIds(before.links, after.links)
+    if (!nodeIds.length && !linkIds.length) return state
+    const changedNodes = new Set(nodeIds); const changedLinks = new Set(linkIds)
+    const beforeSnapshot: ConceptMapSnapshot = { nodeIds, linkIds, nodes: before.nodes.filter(node => changedNodes.has(node.id)), links: before.links.filter(link => changedLinks.has(link.id)) }
+    const afterSnapshot: ConceptMapSnapshot = { nodeIds, linkIds, nodes: after.nodes.filter(node => changedNodes.has(node.id)), links: after.links.filter(link => changedLinks.has(link.id)) }
+    return {
+      undoHistory: pushUndo(state.undoHistory, { kind: 'concept-map', before: beforeSnapshot, after: afterSnapshot, label, view: 'concept-map' }),
+      redoHistory: [],
+      undoNotice: null,
+    }
+  }),
   ideaNeighbors: (id, limit, ignoredTerms, options) => window.planner.ideas.neighbors(id, limit, ignoredTerms, options),
   refreshEmbeddings: (ids, ignoredTerms, options) => window.planner.ideas.refreshEmbeddings(ids, ignoredTerms, options),
   proposeClusters: async (threshold, ignoredTerms, options, ideaIds, onProgress) => window.planner.ideas.clusters(threshold, ignoredTerms, options, ideaIds, onProgress),
@@ -448,6 +619,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   setView: (view) => set({ view }),
   select: (selectedId) => set({ selectedId }),
   selectIdea: (selectedIdeaId) => set({ selectedIdeaId }),
+  requestConceptMapPost: (id) => set({ pendingConceptMapPostId: id, view: 'concept-map' }),
+  clearConceptMapPostRequest: () => set({ pendingConceptMapPostId: null }),
   setQuery: (query) => set({ query }),
   setActiveSpace: (activeSpace) => set({ activeSpace, activeWorkGroupId: null, selectedId: null, selectedIdeaId: null }),
   setActiveWorkGroup: (activeWorkGroupId) => {
@@ -472,7 +645,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   renameSpace: async (space, nextName) => {
     const name = nextName.trim()
     if (!name || name === space) return
-    await window.planner.posts.reassignProject(space, name)
+    await window.planner.posts.reassignProject(space, name, { keepStacks: true })
     for (const group of get().workGroups.filter(item => item.space === space)) {
       await get().saveWorkGroup({ id: group.id, name: group.name, description: group.description, space: name }, { recordHistory: false })
     }
@@ -501,12 +674,12 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   },
   removeSpace: async (space, movePosts) => {
     if (movePosts) {
-      await window.planner.posts.reassignProject(space, 'Mi contenido')
+      await window.planner.posts.reassignProject(space, 'Mi contenido', { keepStacks: false })
       for (const group of get().workGroups.filter(item => item.space === space)) {
         await get().saveWorkGroup({ id: group.id, name: group.name, description: group.description, space: '' }, { recordHistory: false })
       }
       set({
-        posts: get().posts.map(post => post.project === space ? { ...post, project: 'Mi contenido' } : post),
+        posts: get().posts.map(post => post.project === space ? { ...post, project: 'Mi contenido', stackId: null, stackPosition: null } : post),
         ideas: get().ideas.map(idea => idea.space === space ? { ...idea, space: 'Mi contenido' } : idea),
       })
     }

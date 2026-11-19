@@ -102,6 +102,13 @@ export function validatePostInput(value: unknown): Record<string, unknown> {
 
   const distribution = post.distribution === undefined ? [] : post.distribution
   if (!Array.isArray(distribution) || distribution.length > 100) invalid('post.distribution')
+  const stackId = post.stackId === undefined ? undefined : post.stackId === null ? null : text(post.stackId, 'post.stackId', 64, false)
+  const stackPosition = post.stackPosition === undefined ? undefined : post.stackPosition === null ? null : (() => {
+    const value = post.stackPosition
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 9999) invalid('post.stackPosition')
+    return value
+  })()
+
   const validated: Record<string, unknown> = {
     title: text(post.title, 'post.title', 300),
     caption: text(post.caption, 'post.caption', 100_000),
@@ -120,6 +127,8 @@ export function validatePostInput(value: unknown): Record<string, unknown> {
     media: media.map(mediaAsset),
     ideaBlocks: ideaBlocks.map(ideaBlock),
   }
+  if (stackId !== undefined) validated.stackId = stackId
+  if (stackPosition !== undefined) validated.stackPosition = stackPosition
   const id = optionalId(post.id, 'post.id')
   if (id) validated.id = id
   return validated
@@ -334,6 +343,9 @@ export function validateWorkGroupInput(value: unknown): Record<string, unknown> 
   }
   const id = optionalId(group.id, 'workGroup.id')
   if (id) validated.id = id
+  if (group.parentId !== undefined) {
+    validated.parentId = group.parentId == null || group.parentId === '' ? null : text(group.parentId, 'workGroup.parentId', 128, false).trim()
+  }
   return validated
 }
 
@@ -411,6 +423,19 @@ export function validateProject(value: unknown, field: string) {
 
 export function validateClipboardText(value: unknown) {
   return text(value, 'text', 200_000)
+}
+
+/** Texto plano obligatorio; HTML opcional (transporta el manifiesto semántico). */
+export interface ClipboardWriteRequest {
+  text: string
+  html?: string
+}
+
+export function validateClipboardWrite(args: unknown[]): ClipboardWriteRequest {
+  if (args.length !== 1 && args.length !== 2) invalid('count')
+  const request: ClipboardWriteRequest = { text: validateClipboardText(args[0]) }
+  if (args.length === 1 || typeof args[1] !== 'string' || args[1].length === 0) return request
+  return { ...request, html: text(args[1], 'html', 1_000_000) }
 }
 
 export function validateMediaMode(value: unknown) {

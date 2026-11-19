@@ -41,8 +41,15 @@ function AppContent() {
           const value = localStorage.getItem(key)
           if (value !== null) current[key] = value
         }
-        const merged = await window.planner.preferences.sync(current)
-        if (active) for (const [key, value] of Object.entries(merged)) localStorage.setItem(key, value)
+        const merged = await Promise.race([
+          window.planner.preferences.sync(current),
+          new Promise<Record<string, string> | null>(resolve => { window.setTimeout(() => resolve(null), 20_000) }),
+        ])
+        if (merged === null) {
+          reportAppError(new Error('La sincronización de preferencias superó el tiempo de espera. Se usarán los valores locales y el arranque continuará.'), 'Preferencias no sincronizadas')
+        } else if (active) {
+          for (const [key, value] of Object.entries(merged)) localStorage.setItem(key, value)
+        }
       } catch (error) {
         reportAppError(error, 'No se pudieron sincronizar las preferencias')
       }
@@ -121,13 +128,14 @@ function AppContent() {
       const target = event.target instanceof HTMLElement ? event.target : null
       if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
       const redoing = key === 'y' || (key === 'z' && event.shiftKey)
-      if (redoing ? !redoHistory.length : !undoHistory.length) return
+      const history = redoing ? redoHistory : undoHistory
+      if (history.at(-1)?.view !== view) return
       event.preventDefault()
       void (redoing ? redoSavedChange() : undoSavedChange()).catch(error => reportAppError(error, 'No se pudo deshacer el cambio guardado'))
     }
     window.addEventListener('keydown', onShortcut)
     return () => window.removeEventListener('keydown', onShortcut)
-  }, [redoHistory.length, redoSavedChange, undoHistory.length, undoSavedChange])
+  }, [redoHistory, redoSavedChange, undoHistory, undoSavedChange, view])
   useEffect(() => {
     if (!undoNotice) return
     const timeout = window.setTimeout(clearUndoNotice, 2100)

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, net, protocol, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, protocol, shell, Tray, type IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
@@ -14,11 +14,17 @@ import { registerMobileSyncIpcHandlers } from './mobile-sync-ipc-handlers'
 import { registerMediaIpcHandlers } from './media-ipc-handlers'
 import { registerConceptMapIpcHandlers } from './concept-map-ipc-handlers'
 import { registerPostsIpcHandlers } from './posts-ipc-handlers'
-import { validateArgumentCount, validateClipboardText, validateId, validateNoArguments } from './ipc-validation'
+import { validateArgumentCount, validateClipboardWrite, validateId, validateNoArguments } from './ipc-validation'
 import { UpdateManager } from './updater'
 import { createStartupSplashWindow } from './splash'
 
 let mainWindow: BrowserWindow | null = null
+let quickNoteWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let closeToTrayEnabled = true
+let autostartEnabled = false
+const closeToTrayPreferenceKey = 'caballocci.window.close-to-tray'
+const autostartPreferenceKey = 'caballocci.window.autostart'
 let allowMainWindowClose = false
 let lastCloseRequestAt = 0
 let closeRequestTimer: NodeJS.Timeout | undefined
@@ -33,6 +39,157 @@ let activeIpcOperations = 0
 let ipcQuiescingForUpdate = false
 let ipcOperationsPaused = false
 const ipcIdleWaiters = new Set<() => void>()
+// Caches válidos dentro de una llamada IPC: se invalidan al entrar en cada canal para que
+// el mapeo de listas no re-consulte la base de datos por cada publicación/asset/colección.
+let allPostRowsCache: Record<string, unknown>[] | null = null
+let compressedIdsCache: Set<string> | null = null
+
+function resetIpcCaches() {
+  allPostRowsCache = null
+  compressedIdsCache = null
+}
+
+function getAllPostRows() {
+  if (!allPostRowsCache) allPostRowsCache = database.list()
+  return allPostRowsCache
+}
+
+function getCompressedIds() {
+  if (!compressedIdsCache) compressedIdsCache = new Set(database.compressedMediaIds())
+  return compressedIdsCache
+}
+
+function showOrCreateMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    void createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function createTray() {
+  const trayIconPath = app.isPackaged ? path.join(process.resourcesPath, 'icon.png') : path.join(__dirname, '../build/icon.png')
+  let icon = nativeImage.createFromPath(trayIconPath)
+  if (icon.isEmpty()) icon = nativeImage.createEmpty()
+  if (process.platform === 'win32') icon = icon.resize({ width: 16, height: 16 })
+  tray = new Tray(icon)
+  tray.setToolTip('caballocci')
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Abrir caballocci', click: () => showOrCreateMainWindow() },
+    { label: 'Nueva nota rápida', click: () => openQuickNote() },
+    { type: 'separator' },
+    { label: 'Salir', click: () => { allowMainWindowClose = true; app.quit() } },
+  ]))
+  tray.on('click', () => showOrCreateMainWindow())
+}
+
+const quickNoteWindowHtml = `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+<title>Nota rápida</title>
+<style>
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 100%; height: 100%; }
+body { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid #2d3730; background: #101311; color: #e8eee9; font-family: 'Segoe UI', system-ui, sans-serif; }
+header { display: flex; align-items: center; justify-content: space-between; -webkit-app-region: drag; user-select: none; }
+header span { color: #d0a64b; font: 600 10px 'DM Mono', ui-monospace, monospace; letter-spacing: .22em; }
+header small { color: #8d988f; font-size: 10px; }
+textarea { flex: 1; padding: 12px; border: 1px solid #2d3730; border-radius: 8px; background: #171d19; color: inherit; font: 13px/1.5 'Segoe UI', system-ui, sans-serif; outline: none; resize: none; }
+textarea:focus { border-color: #d0a64b; }
+#status { min-height: 12px; margin: 0; color: #9fc9ac; font-size: 10px; }
+footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+footer span { color: #77837a; font-size: 10px; }
+button { border: 0; border-radius: 6px; padding: 8px 16px; background: #ef6548; color: #181510; font: 700 11px 'Segoe UI', sans-serif; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+<header><span>NOTA RÁPIDA</span><small>Bandeja de ideas</small></header>
+<textarea id="note" placeholder="Escribe la nota…" autofocus></textarea>
+<p id="status" aria-live="polite"></p>
+<footer><span>Esc descarta · Ctrl+Enter guarda</span><button id="save" type="button">Guardar</button></footer>
+<script>
+var ta = document.getElementById('note');
+var saveBtn = document.getElementById('save');
+var status = document.getElementById('status');
+ta.focus();
+window.addEventListener('keydown', function (event) {
+  if (event.key === 'Escape') { window.quickNote.close(); return; }
+  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); save(); }
+});
+saveBtn.addEventListener('click', save);
+function save() {
+  var text = ta.value.trim();
+  if (!text) { window.quickNote.close(); return; }
+  saveBtn.disabled = true;
+  window.quickNote.save(text).then(function (result) {
+    if (result && result.ok) {
+      status.textContent = 'Guardada en la Bandeja de ideas';
+      window.setTimeout(function () { window.quickNote.close(); }, 450);
+    } else {
+      saveBtn.disabled = false;
+      status.textContent = (result && result.message) || 'No se pudo guardar la nota';
+      status.style.color = '#e99a8d';
+    }
+  });
+}
+</script>
+</body>
+</html>`
+
+function openQuickNote() {
+  if (quickNoteWindow && !quickNoteWindow.isDestroyed()) {
+    quickNoteWindow.show()
+    quickNoteWindow.focus()
+    return
+  }
+  const window = new BrowserWindow({
+    width: 460, height: 300, center: true, resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
+    skipTaskbar: true, alwaysOnTop: true, frame: false, title: 'Nota rápida', backgroundColor: '#101311',
+    webPreferences: { preload: path.join(__dirname, 'quicknote-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+  })
+  window.setAlwaysOnTop(true, 'floating')
+  quickNoteWindow = window
+  window.once('closed', () => { quickNoteWindow = null })
+  void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(quickNoteWindowHtml)}`)
+}
+
+function assertQuickNoteSender(event: IpcMainInvokeEvent) {
+  const window = quickNoteWindow
+  const frame = event.senderFrame
+  if (!window || window.isDestroyed() || !frame || event.sender !== window.webContents || frame !== window.webContents.mainFrame) {
+    throw new Error('Solicitud IPC rechazada')
+  }
+}
+
+function registerQuickNoteIpcHandlers() {
+  ipcMain.handle('quicknote:capture', (event, ...args: unknown[]) => {
+    assertQuickNoteSender(event)
+    if (args.length !== 1) throw new TypeError('quicknote:capture admite exactamente un argumento')
+    const text = args[0]
+    if (typeof text !== 'string') return { ok: false as const, message: 'La nota debe ser texto.' }
+    const trimmed = text.trim()
+    if (!trimmed) return { ok: false as const, message: 'La nota está vacía.' }
+    if (trimmed.length > 20_000) return { ok: false as const, message: 'La nota es demasiado larga (máximo 20 000 caracteres).' }
+    const firstLine = trimmed.split('\n')[0]
+    const title = firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine
+    try {
+      database.saveIdea({ id: crypto.randomUUID(), space: 'Mi contenido', title, body: trimmed, tags: ['nota-rápida'], status: 'inbox', priority: 'normal', sourceName: 'Nota rápida' })
+      return { ok: true as const }
+    } catch (error) {
+      console.error('No se pudo guardar la nota rápida:', error)
+      return { ok: false as const, message: 'No se pudo guardar la nota. Revisa la consola para más detalles.' }
+    }
+  })
+  ipcMain.on('quicknote:close-self', event => {
+    assertQuickNoteSender(event)
+    quickNoteWindow?.close()
+  })
+}
 
 function setSplashStatus(status: string) {
   splashStatus = status
@@ -496,6 +653,7 @@ function resumeIpcOperations() {
 
 function handle(channel: string, callback: (args: unknown[], event: IpcMainInvokeEvent) => unknown) {
   ipcMain.handle(channel, (event, ...args: unknown[]) => {
+    resetIpcCaches()
     assertTrustedIpcSender(event)
     const finishTracking = trackIpcOperation(channel)
     try {
@@ -546,7 +704,7 @@ function mapMediaAssets(value: unknown) {
       .filter(item => typeof item === 'object' && item !== null && !Array.isArray(item))
       .map(item => {
         const asset = item as Record<string, unknown>
-        const compressed = typeof asset.id === 'string' && Boolean(database?.getMediaCompressionState(asset.id))
+        const compressed = typeof asset.id === 'string' && getCompressedIds().has(String(asset.id))
         return { id: asset.id, sourceId: asset.sourceId, name: asset.name, kind: asset.kind, size: asset.size, mode: asset.mode, presentationRole: asset.presentationRole, sequence: asset.sequence, groupName: asset.groupName, compressed }
       })
   } catch {
@@ -581,6 +739,8 @@ function mapPost(row: Record<string, unknown>) {
     media: mapMediaAssets(row.media), ideaBlocks: mapIdeaBlocks(row.idea_blocks), sourceIdeaId: row.source_idea_id || null,
     isCombined: Number(row.combined_idea_count || 0) > 0,
     combinedIdeaIds: parseJsonStringArray(row.combined_idea_ids),
+    stackId: row.stack_id ? String(row.stack_id) : null,
+    stackPosition: row.stack_position == null ? null : Number(row.stack_position),
     createdAt: row.created_at, updatedAt: row.updated_at,
   }
 }
@@ -588,9 +748,9 @@ function mapPost(row: Record<string, unknown>) {
 function mapWorkGroup(row: Record<string, unknown>) {
   const postIds = Array.isArray(row.post_ids) ? row.post_ids.map(String) : []
   const postIdSet = new Set(postIds)
-  const compressedIds = new Set(database.compressedMediaIds())
+  const compressedIds = getCompressedIds()
   const compressedMediaIds = new Set([
-    ...database.list()
+    ...getAllPostRows()
     .filter(post => postIdSet.has(String(post.id)))
     .flatMap(post => mapMediaAssets(post.media))
     .filter(asset => compressedIds.has(String(asset.id)))
@@ -604,6 +764,7 @@ function mapWorkGroup(row: Record<string, unknown>) {
     description: row.description,
     color: row.color || '',
     space: row.space || '',
+    parentId: row.parent_id ? String(row.parent_id) : null,
     archivedAt: row.archived_at || null,
     postIds,
     compressedMediaCount,
@@ -647,10 +808,10 @@ function restoreTargetMedia(targetType: 'group' | 'post', targetId: string) {
     if (!database.getPost(targetId)) throw new Error('No se encontró la publicación.')
     postIds = new Set([targetId])
   }
-  const compressedIds = new Set(database.compressedMediaIds())
+  const compressedIds = getCompressedIds()
   const assetIds = [...new Set([
     ...database.compressedMediaIdsForTarget(targetType, targetId),
-    ...database.list()
+    ...getAllPostRows()
       .filter(post => postIds.has(String(post.id)))
       .flatMap(post => mapMediaAssets(post.media))
       .map(asset => String(asset.id))
@@ -706,8 +867,14 @@ async function createWindow() {
       allowRunningInsecureContent: false,
     },
   })
+  mainWindow.on('closed', () => { mainWindow = null })
   mainWindow.on('close', event => {
     if (allowMainWindowClose) return
+    if (closeToTrayEnabled) {
+      event.preventDefault()
+      mainWindow?.hide()
+      return
+    }
     const now = Date.now()
     if (now - lastCloseRequestAt <= 2_000) {
       allowMainWindowClose = true
@@ -750,6 +917,10 @@ app.setName('caballocci')
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 
 if (!hasSingleInstanceLock) {
+  dialog.showErrorBox(
+    'caballocci ya está abierto',
+    'Ya hay una instancia de caballocci en ejecución (o una instancia anterior bloqueada).\nBusca la ventana en la barra de tareas o cierra los procesos de caballocci en el Administrador de tareas y vuelve a intentarlo.',
+  )
   app.quit()
 } else {
   app.on('second-instance', () => {
@@ -759,7 +930,43 @@ if (!hasSingleInstanceLock) {
     mainWindow.focus()
   })
 
-app.whenReady().then(async () => {
+function ensureAllPostMediaFolders() {
+  try {
+    for (const row of database.list()) {
+      try {
+        ensurePostMediaFolder(String(row.project || ''), String(row.id))
+      } catch (error) {
+        console.error('No se pudo asegurar la carpeta de medios de una publicación:', error)
+      }
+    }
+  } catch (error) {
+    console.error('No se pudieron preparar las carpetas de medios:', error)
+  }
+}
+
+function reportStartupFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error('No se pudo iniciar caballocci:', error)
+  try {
+    if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
+  } catch { /* ignore */ }
+  splashWindow = null
+  try {
+    fs.appendFileSync(
+      path.join(app.getPath('userData'), 'startup-error.log'),
+      `[${new Date().toISOString()}] ${error instanceof Error ? error.stack || message : message}\n`,
+      'utf8',
+    )
+  } catch { /* ignore */ }
+  dialog.showErrorBox(
+    'No se pudo iniciar caballocci',
+    `${message}\n\nDetalle guardado en startup-error.log dentro de la carpeta de datos.\nCierra los programas que estén saturando el disco y vuelve a intentarlo.`,
+  )
+  app.exit(1)
+}
+
+function startCaballocci() {
+  return (async () => {
   splashShownAt = Date.now()
   splashWindow = createStartupSplashWindow()
   splashWindow.webContents.once('did-finish-load', () => {
@@ -787,8 +994,20 @@ app.whenReady().then(async () => {
   }
   database = new PlannerDatabase(databasePath, wasmPath, backupsDirectory)
   await database.init()
+  const storedPreferences = database.listPreferences()
+  closeToTrayEnabled = storedPreferences[closeToTrayPreferenceKey] !== 'false'
+  autostartEnabled = storedPreferences[autostartPreferenceKey] === 'true'
+  if (process.platform === 'win32') {
+    try { app.setLoginItemSettings({ openAtLogin: autostartEnabled }) } catch (error) { console.error('No se pudo aplicar el inicio automático con Windows:', error) }
+  }
+  try { createTray() } catch (error) { console.error('No se pudo crear el icono de bandeja:', error) }
+  registerQuickNoteIpcHandlers()
+  try {
+    if (!globalShortcut.register('CommandOrControl+Alt+N', () => openQuickNote())) {
+      console.warn('No se pudo registrar el atajo global Ctrl+Alt+N: ¿lo está usando otra aplicación?')
+    }
+  } catch (error) { console.error('No se pudo registrar el atajo global Ctrl+Alt+N:', error) }
   setSplashStatus('Preparando tus publicaciones')
-  database.list().forEach(row => ensurePostMediaFolder(String(row.project || ''), String(row.id)))
   registerMediaProtocol()
   updater = new UpdateManager(
     () => mainWindow,
@@ -801,8 +1020,17 @@ app.whenReady().then(async () => {
   registerIdeaIpcHandlers({ database, handle, withoutArguments, mapIdea, mapPost, mapIdeaNeighbor, ensurePostMediaFolder })
   registerConceptMapIpcHandlers({ database, handle, withoutArguments })
   handle('clipboard:write', args => {
-    validateArgumentCount(args, 1)
-    clipboard.writeText(validateClipboardText(args[0]))
+    const request = validateClipboardWrite(args)
+    if (request.html) clipboard.write({ text: request.text, html: request.html })
+    else clipboard.writeText(request.text)
+  })
+  handle('clipboard:read-html', args => {
+    validateNoArguments(args)
+    return clipboard.readHTML()
+  })
+  handle('clipboard:read-text', args => {
+    validateNoArguments(args)
+    return clipboard.readText()
   })
   handle('preferences:sync', args => {
     validateArgumentCount(args, 1)
@@ -825,6 +1053,27 @@ app.whenReady().then(async () => {
     const key = String(args[0])
     if (!/^caballocci\.[a-z0-9._-]+$/i.test(key)) throw new TypeError('Preferencia invalida')
     database.removePreference(key)
+  })
+  handle('settings:get-behavior', withoutArguments(() => ({ closeToTray: closeToTrayEnabled, autostart: autostartEnabled })))
+  handle('settings:set-behavior', args => {
+    validateArgumentCount(args, 1)
+    const value = args[0]
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Preferencias invalidas')
+    const candidate = value as Record<string, unknown>
+    const nextCloseToTray = candidate.closeToTray
+    const nextAutostart = candidate.autostart
+    if (nextCloseToTray !== undefined && typeof nextCloseToTray !== 'boolean') throw new TypeError('closeToTray debe ser booleano')
+    if (nextAutostart !== undefined && typeof nextAutostart !== 'boolean') throw new TypeError('autostart debe ser booleano')
+    if (nextCloseToTray !== undefined) closeToTrayEnabled = nextCloseToTray
+    if (nextAutostart !== undefined) autostartEnabled = nextAutostart
+    database.savePreferences({ [closeToTrayPreferenceKey]: String(closeToTrayEnabled), [autostartPreferenceKey]: String(autostartEnabled) })
+    if (nextAutostart !== undefined && process.platform !== 'linux') {
+      try { app.setLoginItemSettings({ openAtLogin: autostartEnabled }) } catch (error) {
+        console.error('No se pudo actualizar el inicio automático:', error)
+        throw new Error('El sistema no pudo guardar el inicio automático.')
+      }
+    }
+    return { closeToTray: closeToTrayEnabled, autostart: autostartEnabled }
   })
   handle('files:read-text', async args => {
     if (args.length !== 0) throw new TypeError('Argumento IPC no valido: files.readText')
@@ -1004,8 +1253,12 @@ app.whenReady().then(async () => {
   registerMediaIpcHandlers({ database, dataDirectory, getMainWindow: () => mainWindow, handle, withoutArguments, ensurePostMediaFolder, mapPost })
   setSplashStatus('Cargando el tablero')
   await createWindow()
+  ensureAllPostMediaFolders()
   updater.startAutomaticChecks()
-})
+  })()
+}
+
+app.whenReady().then(startCaballocci).catch(reportStartupFailure)
 }
 
 function ensurePostMediaFolder(project: string, postId: string) {
@@ -1016,6 +1269,6 @@ function ensurePostMediaFolder(project: string, postId: string) {
   return folder
 }
 
-app.on('before-quit', () => { updater?.onAppWillQuit(); database?.flush() })
+app.on('before-quit', () => { globalShortcut.unregisterAll(); tray?.destroy(); updater?.onAppWillQuit(); database?.flush() })
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

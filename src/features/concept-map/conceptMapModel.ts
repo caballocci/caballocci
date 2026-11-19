@@ -1,4 +1,5 @@
 import type { ConceptMapFolder, ConceptMapLink, ConceptMapNode, ConceptNodeKind, ConceptRelation, Idea } from '../../shared/types'
+import { formatLocalDate } from '../../shared/date'
 
 export const nodeSize = { width: 220, height: 116 }
 
@@ -22,11 +23,7 @@ export const postStatusLabels: Record<string, string> = { idea: 'Idea', draft: '
 export const priorityLabels: Record<string, string> = { low: 'Baja', normal: 'Normal', high: 'Alta' }
 export const contentTypeLabels: Record<string, string> = { reel: 'Reel', carousel: 'Carrusel', story: 'Historia', post: 'Publicación', thread: 'Hilo' }
 
-export function formatDate(value: string | null | undefined) {
-  if (!value) return ''
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
-}
+export const formatDate = formatLocalDate
 
 /** True when the node text is the placeholder used for untitled sources or equals the source title. */
 export function sameTitle(nodeTitle: string, sourceTitle: string) {

@@ -3,7 +3,7 @@
 .board-archive-toggle { display: inline-flex; align-items: center; gap: 6px; }
 .board-archive-toggle span { padding: 2px 6px; border-radius: 9px; background: #252c27; color: #c4cec7; font-size: 9px; }
 /* Sin caja con scroll propio: el tablero scrollea con la página, como antes */
-.board-lanes-scroll { width: 100%; min-height: 50vh; overflow-x: auto; scrollbar-width: thin; scrollbar-color: #465149 #171c18; }
+.board-lanes-scroll { width: 100%; min-height: 50vh; overflow-x: auto; scrollbar-width: thin; scrollbar-color: #465149 #171c18; padding: 8px 10px 64px; }
 .board-list-view.area-selection-surface { display: block; }
 /* 6 columnas, sin columna lateral de carriles */
 .board-lanes { display: grid; grid-template-columns: repeat(6, minmax(180px, 1fr)); gap: 0 8px; min-width: 1120px; align-items: start; }
@@ -37,9 +37,9 @@
 .board-lane-order button:hover:not(:disabled) { background: #273029; color: #edf3ee; }
 .board-lane-order button:disabled { opacity: .25; cursor: default; }
 /* Celdas: altura natural, sin scroll interno */
-.board-lane-cell { display: grid; align-content: start; gap: 6px; min-width: 0; min-height: 12px; padding: 6px; background: #121714; }
-.board-lane-cell:empty { padding: 0; }
-.board-lane-cell.empty { min-height: 72px; }
+.board-lane-cell { display: grid; align-content: start; gap: 6px; min-width: 0; min-height: 30vh; padding: 6px; background: #121714; }
+.board-lane-cell:empty { padding: 0; min-height: 30vh; }
+.board-lane-cell.empty { min-height: 34vh; }
 .board-drop-hint { display: grid; min-height: 56px; place-items: center; padding: 8px; border: 1px dashed #354239; border-radius: 5px; color: #78877d; font-size: 9px; text-align: center; pointer-events: none; }
 .board-card-slot { position: relative; height: 124px; min-width: 0; }
 .board-lane-cell article { position: absolute; top: 0; right: 0; left: 0; z-index: 0; display: flex; flex-direction: column; min-width: 0; height: 124px; box-sizing: border-box; padding: 9px 10px; border: 1px solid #2d3730; border-radius: 6px; background: #171d19; container-type: inline-size; cursor: grab; transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
@@ -129,6 +129,52 @@
 @media (min-width: 1450px) {
   .board-lanes-scroll { overflow: visible; }
 }
+
+/* === Pilas de publicaciones === */
+.board-stack-slot { overflow: visible; z-index: 2; }
+.board-stack-slot.expanded { height: auto; }
+.board-stack-layer { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; border: 1px solid #2d3730; border-radius: 6px; background: #131815; pointer-events: none; transition: transform .18s ease; }
+.board-stack-layer-1 { transform: translate(4px, 6px); }
+.board-stack-layer-2 { transform: translate(8px, 12px); background: #101511; }
+.board-stack-slot:hover .board-stack-layer-1 { transform: translate(6px, 8px) rotate(-1.6deg); }
+.board-stack-slot:hover .board-stack-layer-2 { transform: translate(12px, 15px) rotate(1.8deg); }
+.board-stack-slot.stack-drop-target .board-stack-layer-1 { border-color: #d0a64b; background: #262418; transform: translate(6px, 8px); transition: none; }
+.board-stack-slot.stack-drop-target .board-stack-layer-2 { border-color: #b58a3c; background: #1c1a12; transform: translate(12px, 15px); transition: none; }
+@media (prefers-reduced-motion: reduce) { .board-stack-layer { transition: none; } .board-stack-slot:hover .board-stack-layer-1, .board-stack-slot:hover .board-stack-layer-2 { transform: translate(4px, 6px); } }
+.board-card.board-stack-card { z-index: 1; cursor: pointer; }
+.board-stack-slot.stack-drop-target .board-stack-layer-1 { border-color: #d0a64b; background: #262418; transform: translate(6px, 8px); }
+.board-stack-slot.stack-drop-target .board-stack-layer-2 { border-color: #b58a3c; background: #1c1a12; transform: translate(12px, 15px); }
+.board-stack-slot.stack-drop-target .board-card { border-color: #d0a64b; background: #26241a; box-shadow: inset 0 0 0 1px #d0a64b, 0 0 0 2px #d0a64b44; }
+.board-stack-slot.stack-drop-target .board-card::after { position: absolute; right: 6px; bottom: 6px; z-index: 6; padding: 3px 9px; border-radius: 9px; background: #d0a64b; color: #17130a; font: 700 10px 'Segoe UI', sans-serif; content: 'Apilar'; }
+.board-stack-chip { display: inline-flex; flex: none; align-items: center; gap: 2px; height: 20px; padding: 0 6px; border-radius: 4px; background: #232b25; color: #d7c07c; font: 700 9px 'DM Mono', monospace; }
+.board-stack-expanded { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; width: 100%; margin: 0; padding: 6px; border: 1px solid #333d36; box-shadow: inset 2px 0 0 #d0a64b; border-radius: 6px; background: #131815; min-width: 0; }
+.board-card-slot.board-stack-slot.expanded { min-width: 0; height: auto; }
+.board-stack-expanded-header { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px 6px; border-bottom: 1px solid #252e28; color: #d7c07c; }
+.board-stack-expanded-header strong { flex: none; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.board-stack-expanded-header small { min-width: 0; margin-right: auto; overflow: hidden; color: #77837a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.board-stack-collapse { display: grid; flex: none; width: 26px; height: 26px; place-items: center; border: 1px solid #3a463d; border-radius: 4px; background: #1c231e; color: #cfd6cf; cursor: pointer; }
+.board-stack-collapse:hover { background: #222a24; color: #edf3ee; border-color: #525f55; }
+.board-stack-collapse:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
+.board-stack-member { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 6px 8px; border: 1px solid #232b25; border-radius: 5px; background: #161c18; cursor: grab; }
+.board-stack-member-index { flex: none; min-width: 14px; color: #67716a; font: 10px 'DM Mono', monospace; text-align: center; }
+.board-stack-member-icons { display: inline-flex; flex: none; align-items: center; gap: 4px; color: #8d988f; }
+.board-stack-member:hover { border-color: #38443b; background: #1a211c; }
+.board-stack-member:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
+.board-stack-member.selected { border-color: #d0a64b; box-shadow: inset 0 0 0 1px #d0a64b; }
+.board-stack-member.is-dragging { opacity: .4; border-style: dashed; cursor: grabbing; }
+.board-stack-member.reorder-over-top { box-shadow: 0 -2px 0 #d0a64b; }
+.board-stack-member.reorder-over-bottom { box-shadow: 0 2px 0 #d0a64b; }
+.board-stack-member.stack-drop-target { border-color: #d0a64b; background: #221f18; }
+.board-stack-member .board-select-hit { position: static; flex: none; width: 18px; height: 18px; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.board-stack-member:hover .board-select-hit, .board-stack-member:focus-within .board-select-hit { opacity: 1; pointer-events: auto; }
+.board-stack-member .board-stack-member-unstack { display: grid; flex: none; width: 22px; height: 22px; place-items: center; border: 0; border-radius: 4px; background: transparent; color: #8d988f; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.board-stack-member:hover .board-stack-member-unstack, .board-stack-member:focus-within .board-stack-member-unstack { opacity: 1; pointer-events: auto; }
+.board-stack-member .board-stack-member-unstack:hover { background: #2a201d; color: #e8c08f; }
+.board-stack-member .board-stack-member-unstack:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; opacity: 1; pointer-events: auto; }
+.board-stack-member-title { flex: 1 1 auto; min-width: 0; max-height: 31px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; color: #e8eee9; font-size: 11px; line-height: 15px; white-space: normal; }
+.board-stack-member-date { display: inline-flex; flex: none; align-items: center; gap: 3px; color: #9aa69e; font-size: 9px; font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) { .board-stack-layer, .board-stack-member { transition: none; } }
 
 /* ---------- Feedback visual del drag & drop ---------- */
 .board-lane-cell { transition: background .12s ease; }

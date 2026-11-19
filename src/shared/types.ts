@@ -28,6 +28,9 @@ export interface Post {
   sourceIdeaId: string | null
   isCombined?: boolean
   combinedIdeaIds?: string[]
+  /** null cuando no está en una pila; apunta a la pila de la publicación en el tablero. */
+  stackId: string | null
+  stackPosition: number | null
   createdAt: string
   updatedAt: string
 }
@@ -39,6 +42,8 @@ export interface WorkGroup {
   color: string
   /** Espacio propietario; cadena vacía indica una colección general. */
   space: string
+  /** Colección padre; null indica una colección de nivel superior. */
+  parentId: string | null
   archivedAt: string | null
   postIds: string[]
   compressedMediaCount: number
@@ -46,7 +51,7 @@ export interface WorkGroup {
   updatedAt: string
 }
 
-export type WorkGroupInput = Pick<WorkGroup, 'name' | 'description' | 'space'> & { id?: string; color?: string }
+export type WorkGroupInput = Pick<WorkGroup, 'name' | 'description' | 'space'> & { id?: string; color?: string; parentId?: string | null }
 
 export interface MediaAsset {
   id: string
@@ -173,7 +178,7 @@ export interface IdeaAnalysisProgress { stage: 'loading-model' | 'embeddings' | 
 
 export type IdeaInput = Omit<Idea, 'id' | 'createdAt' | 'updatedAt' | 'postId' | 'combinedPostId' | 'combinedPostIds'> & { id?: string; postId?: string | null; combinedPostId?: string | null; combinedPostIds?: string[] }
 
-export type PostInput = Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'media' | 'ideaBlocks' | 'sourceIdeaId'> & { id?: string; media?: MediaAsset[]; ideaBlocks?: IdeaBlock[]; sourceIdeaId?: string | null }
+export type PostInput = Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'media' | 'ideaBlocks' | 'sourceIdeaId' | 'stackId' | 'stackPosition'> & { id?: string; media?: MediaAsset[]; ideaBlocks?: IdeaBlock[]; sourceIdeaId?: string | null; stackId?: string | null; stackPosition?: number | null }
 
 export interface ConceptMapNode {
   id: string
@@ -250,6 +255,14 @@ export interface AppResourceUsage {
   memoryBytes: number
   processCount: number
   sampledAt: number
+}
+
+/** Comportamiento de la ventana principal y del arranque (persistido en app_preferences). */
+export interface AppBehavior {
+  /** Si está activado (por defecto), cerrar la ventana la oculta en la bandeja en lugar de salir. */
+  closeToTray: boolean
+  /** Si está activado, caballocci se registra para iniciarse con el sistema operativo. */
+  autostart: boolean
 }
 
 export interface OptionalIntegration {
@@ -360,7 +373,7 @@ export interface ElectronAPI {
     list(): Promise<Post[]>
     save(post: PostInput): Promise<Post>
     remove(id: string): Promise<void>
-    reassignProject(fromProject: string, toProject: string): Promise<void>
+    reassignProject(fromProject: string, toProject: string, options?: { keepStacks?: boolean }): Promise<void>
     uncombine(id: string): Promise<{ ideas: Idea[]; post: Post }>
   }
   workGroups: {
@@ -437,7 +450,7 @@ export interface ElectronAPI {
     removeFolder(id: string): Promise<{ parentId: string | null }>
   }
   media: { previewCsvBatch(): Promise<{ token: string; csvName: string; folderName: string; layout: 'posts-in-rows' | 'posts-in-columns'; matches: Array<{ postId: string; project: string; code: string; name: string; targetName: string; isCover: boolean; title: string; columnHeader: string; referenceText: string }>; coverCandidates: Array<{ postId: string; project: string; code: string; name: string; targetName: string; isCover: boolean; title: string; columnHeader: string; referenceText: string }>; unmatched: string[] } | null>; applyCsvBatch(token: string, confirmCovers: boolean): Promise<{ files: number; posts: number }>; cancelCsvBatch(token: string): Promise<void>; list(): Promise<MediaAsset[]>; listForPosts(targets: Array<{ id: string; project: string }>): Promise<{ library: MediaAsset[]; attached: Record<string, MediaAsset[]>; usages: Record<string, Array<{ postId: string; title: string }>> }>; copyToPost(postId: string, project: string, assetIds: string[]): Promise<MediaAsset[]>; duplicatePostAsset(postId: string, project: string, assetId: string): Promise<MediaAsset>; deletePostAsset(postId: string, project: string, assetId: string): Promise<void>; choose(mode: 'copy' | 'reference', postId?: string, project?: string): Promise<MediaAsset[]>; scanPostFolder(postId: string, project?: string): Promise<MediaAsset[]>; organizePost(postId: string, project: string, assetIds: string[], groupName: string, renameFrom?: string): Promise<void>; reveal(id: string): Promise<void>; openFolder(postId?: string, project?: string): Promise<void>; phoneExportFolder(): Promise<string | null>; exportToPhone(postId: string, options?: { chooseFolder?: boolean }): Promise<PhoneExportResult | null>; imageUrl(id: string): string }
-  clipboard: { write(text: string): Promise<void> }
+  clipboard: { write(text: string, html?: string): Promise<void>; readHtml(): Promise<string>; readText(): Promise<string> }
   preferences: { sync(entries: Record<string, string>): Promise<Record<string, string>>; remove(key: string): Promise<void> }
   files: { readText(): Promise<{ name: string; path: string; text: string } | null> }
   system: {
@@ -456,6 +469,8 @@ export interface ElectronAPI {
     openSyncthingUi(url: string): Promise<void>
     openMobileAppDownload(): Promise<{ available: boolean }>
     createBackup(): Promise<string>
+    getBehavior(): Promise<AppBehavior>
+    setBehavior(behavior: Partial<AppBehavior>): Promise<AppBehavior>
   }
   updates: {
     getState(): Promise<UpdateState>

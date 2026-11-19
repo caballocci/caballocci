@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react'
-import { CheckSquare, ChevronDown, ChevronUp, Clipboard, ClipboardCopy, Lightbulb, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { CheckSquare, ChevronDown, ChevronUp, Clipboard, ClipboardCopy, ClipboardPaste, Lightbulb, Plus, Trash2 } from 'lucide-react'
 import type { IdeaBlock } from '../../shared/types'
 import type { UndoableChange } from '../../app/useUndoableState'
 import { runWithErrorReporting } from '../../app/errors'
+import { parseSlidesFromText, readClipboardPayload, withClipboardPayload, type ClipboardItem, type ClipboardSlideItem } from '../../shared/clipboard-payload'
 import { formatTitle } from './editor-utils'
 
 export function EditorIdeaBlocks({ blocks, onChange }: { blocks: IdeaBlock[]; onChange(blocks: IdeaBlock[], change: UndoableChange): void }) {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [selectionFeedback, setSelectionFeedback] = useState('')
+  const [pasteFeedback, setPasteFeedback] = useState('')
+  const [includeSlideLabels, setIncludeSlideLabels] = useState(true)
   const selectedBlocks = blocks
     .map((block, index) => ({ block, slideNumber: index + 1 }))
     .filter(({ block }) => selectedIds.has(block.id))
@@ -19,6 +22,12 @@ export function EditorIdeaBlocks({ blocks, onChange }: { blocks: IdeaBlock[]; on
     const timeout = window.setTimeout(() => setSelectionFeedback(''), 1800)
     return () => window.clearTimeout(timeout)
   }, [selectionFeedback])
+
+  useEffect(() => {
+    if (!pasteFeedback) return
+    const timeout = window.setTimeout(() => setPasteFeedback(''), 2600)
+    return () => window.clearTimeout(timeout)
+  }, [pasteFeedback])
 
   const add = () => onChange([...blocks, { id: crypto.randomUUID(), title: '', text: '' }], { label: 'Añadir diapositiva' })
   const update = (id: string, patch: Partial<IdeaBlock>, change: UndoableChange) => onChange(blocks.map(block => block.id === id ? { ...block, ...patch } : block), change)
@@ -35,18 +44,78 @@ export function EditorIdeaBlocks({ blocks, onChange }: { blocks: IdeaBlock[]; on
   const selectAll = () => setSelectedIds(current => blocks.every(block => current.has(block.id))
     ? new Set()
     : new Set(blocks.map(block => block.id)))
-  const copySelected = async (includeSlideLabels: boolean) => {
-    const text = copyableBlocks.map(({ block, slideNumber }) => {
-      const content = [block.title.trim(), block.text.trim()].filter(Boolean).join('\n')
+  const copySelected = async (mode: 'slide' | 'text') => {
+    // El manifiesto copia exactamente lo que muestra el texto plano: "solo
+    // texto" viaja con título vacío, así el pegado reconstruye lo copiado.
+    const items: ClipboardItem[] = copyableBlocks
+      .filter(({ block }) => mode === 'slide' || block.text.trim())
+      .map(({ block }) => ({ kind: 'slide', title: mode === 'slide' ? block.title.trim() : '', text: block.text.trim() }))
+    const parts = copyableBlocks.map(({ block, slideNumber }) => {
+      const content = mode === 'slide' ? [block.title.trim(), block.text.trim()].filter(Boolean).join('\n') : block.text.trim()
+      if (!content) return null
       return includeSlideLabels ? `DIAPOSITIVA ${String(slideNumber).padStart(2, '0')}\n${content}` : content
-    }).join('\n\n')
-    if (!text) return
+    }).filter(part => part !== null)
+    const text = parts.join('\n\n')
+    if (!text) {
+      setSelectionFeedback(mode === 'text' ? 'Ninguna diapositiva seleccionada tiene texto' : 'Nada que copiar')
+      return
+    }
     await runWithErrorReporting(async () => {
-      await window.planner.clipboard.write(text)
-      setSelectionFeedback(includeSlideLabels ? 'Diapositivas copiadas' : 'Texto copiado')
+      const request = withClipboardPayload(text, items)
+      await window.planner.clipboard.write(request.text, request.html)
+      setSelectionFeedback(mode === 'slide' ? 'Diapositivas copiadas' : 'Texto copiado')
     }, 'No se pudieron copiar las diapositivas')
   }
   const remove = (id: string) => onChange(blocks.filter(block => block.id !== id), { label: 'Eliminar diapositiva' })
+
+  const appendPasted = (slides: Array<{ title: string; text: string }>, label: string, feedback: string) => {
+    onChange([...blocks, ...slides.map(slide => ({ id: crypto.randomUUID(), title: slide.title, text: slide.text }))], { label })
+    setPasteFeedback(feedback)
+  }
+
+  const pluralize = (count: number, singular: string) => `${count} ${count === 1 ? singular : `${singular}s`}`
+
+  /** Regla: pegar nunca destruye — solo crea o anexa. Un pegado = un paso de deshacer. */
+  const pasteFromClipboard = async () => {
+    await runWithErrorReporting(async () => {
+      const payload = readClipboardPayload(await window.planner.clipboard.readHtml())
+      if (payload) {
+        const slides = payload.items.filter((item): item is ClipboardSlideItem => item.kind === 'slide')
+        const skipped = payload.items.length - slides.length
+        if (!slides.length) {
+          setPasteFeedback(skipped ? `Nada pegable aquí · ${pluralize(skipped, 'campo de publicación')} ignorado${skipped === 1 ? '' : 's'}` : 'Nada pegable en el portapapeles')
+          return
+        }
+        appendPasted(slides, `Pegar ${pluralize(slides.length, 'diapositiva')}`, `Pegadas ${pluralize(slides.length, 'diapositiva')}${skipped ? ` · ${pluralize(skipped, 'campo')} ignorado${skipped === 1 ? '' : 's'}` : ''}`)
+        return
+      }
+      const parsed = parseSlidesFromText(await window.planner.clipboard.readText())
+      if (!parsed.length) {
+        setPasteFeedback('No hay texto pegable en el portapapeles')
+        return
+      }
+      appendPasted(parsed, `Pegar ${pluralize(parsed.length, 'diapositiva')}`, `Pegadas ${pluralize(parsed.length, 'diapositiva')} (desde texto plano)`)
+    }, 'No se pudo pegar en las diapositivas')
+  }
+
+  const pasteRef = useRef(pasteFromClipboard)
+  pasteRef.current = pasteFromClipboard
+
+  // Ctrl+V interceptado solo fuera de campos de texto: el pegado nativo
+  // en título/texto/notas manda siempre.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return
+      if (event.key.toLowerCase() !== 'v') return
+      const target = event.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
+      event.preventDefault()
+      void pasteRef.current()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   const move = (index: number, offset: -1 | 1) => {
     const target = index + offset
     if (target < 0 || target >= blocks.length) return
@@ -59,13 +128,16 @@ export function EditorIdeaBlocks({ blocks, onChange }: { blocks: IdeaBlock[]; on
   return <section className="idea-blocks">
     <header><div><span>DIAPOSITIVAS</span><strong>{blocks.length} {blocks.length === 1 ? 'diapositiva' : 'diapositivas'}</strong></div><div className="idea-blocks-actions">
       <button type="button" className={`idea-selection-toggle${selectionMode ? ' active' : ''}`} aria-pressed={selectionMode} disabled={!selectionMode && blocks.length === 0} onClick={() => { setSelectionMode(mode => !mode); setSelectedIds(new Set()); setSelectionFeedback('') }}><CheckSquare size={13} /> {selectionMode ? 'Cancelar' : 'Seleccionar'}</button>
+      <button type="button" className="idea-paste-toggle" onClick={() => void pasteFromClipboard()}><ClipboardPaste size={13} /> Pegar</button>
       <button type="button" className="new-button" onClick={add}><Plus size={15} /> Nueva diapositiva</button>
     </div></header>
+    {pasteFeedback && <p className="idea-paste-feedback" role="status" aria-live="polite">{pasteFeedback}</p>}
     {selectionMode && <div className="idea-selection-toolbar" role="toolbar" aria-label="Acciones para las diapositivas">
       <div><span>{selectedBlocks.length} de {blocks.length} seleccionadas</span><button type="button" onClick={selectAll}>{selectedBlocks.length === blocks.length ? 'Quitar selección' : 'Seleccionar todas'}</button></div>
       <div>
-        <button type="button" disabled={!copyableBlocks.length} onClick={() => void copySelected(true)}><ClipboardCopy size={13} /> Copiar diapositivas</button>
-        <button type="button" disabled={!copyableBlocks.length} onClick={() => void copySelected(false)}><Clipboard size={13} /> Copiar solo texto</button>
+        <label className="idea-label-option" title="Antepone DIAPOSITIVA NN a cada diapositiva copiada"><input type="checkbox" checked={includeSlideLabels} onChange={event => setIncludeSlideLabels(event.target.checked)} /> DIAPOSITIVA NN</label>
+        <button type="button" disabled={!copyableBlocks.length} onClick={() => void copySelected('slide')}><ClipboardCopy size={13} /> Copiar diapositivas</button>
+        <button type="button" disabled={!copyableBlocks.length} onClick={() => void copySelected('text')}><Clipboard size={13} /> Copiar solo texto</button>
       </div>
       {selectionFeedback && <span className="idea-selection-feedback" role="status" aria-live="polite">{selectionFeedback}</span>}
     </div>}

@@ -52,3 +52,56 @@ test('persists many-to-many work group membership and archives independently of 
   assert.deepEqual(db.exec('SELECT id,status FROM posts ORDER BY id')[0].values, [['post-a', 'draft'], ['post-b', 'approved']])
   assert.deepEqual(repository.list().find(group => group.id === series.id)?.post_ids, ['post-a'])
 })
+
+test('nested work groups: archive applies to the subtree, delete moves children up and cycles are rejected', async t => {
+  const SQL = await initSqlJs({ locateFile: file => path.resolve('node_modules/sql.js/dist', file) })
+  const db = new SQL.Database()
+  t.after(() => db.close())
+  runMigrations(db, false, () => assert.fail('A new database must not require a backup'))
+
+  db.run("INSERT INTO posts (id,title,status,created_at,updated_at) VALUES ('post-a','A','draft','now','now')")
+  const repository = new WorkGroupsRepository(db, () => {})
+  const parent = repository.save({ name: 'Verano', description: '', space: '' })
+  const child = repository.save({ name: 'Reels', description: '', parentId: parent.id })
+  const grandchild = repository.save({ name: 'Versión B', description: '', parentId: child.id })
+  assert.equal(child.parent_id, parent.id)
+  assert.equal(grandchild.parent_id, child.id)
+  assert.equal(repository.list().find(group => group.id === grandchild.id)?.parent_id, child.id)
+
+  // Nesting a collection under one of its descendants would create a cycle.
+  assert.throws(() => repository.save({ id: String(parent.id), name: 'Verano', description: '', parentId: grandchild.id }), /descendiente/)
+  assert.throws(() => repository.save({ id: String(child.id), name: 'Reels', description: '', parentId: child.id }), /sí misma/)
+  assert.throws(() => repository.save({ id: String(child.id), name: 'Reels', description: '', parentId: 'missing-collection' }), /No se encontró la colección de destino/)
+
+  // Archiving a collection archives its whole subtree; restoring lifts it back.
+  repository.setPosts(String(grandchild.id), ['post-a'])
+  repository.setArchived(String(child.id), true)
+  let listed = repository.list()
+  assert.ok(listed.find(group => group.id === child.id)?.archived_at)
+  assert.ok(listed.find(group => group.id === grandchild.id)?.archived_at)
+  assert.equal(listed.find(group => group.id === parent.id)?.archived_at, null)
+  repository.setArchived(String(child.id), false)
+  listed = repository.list()
+  assert.equal(listed.find(group => group.id === child.id)?.archived_at, null)
+  assert.equal(listed.find(group => group.id === grandchild.id)?.archived_at, null)
+
+  // Deleting a middle collection moves its children up one level; posts are kept.
+  repository.remove(String(child.id))
+  listed = repository.list()
+  assert.equal(listed.some(group => group.id === child.id), false)
+  assert.equal(listed.find(group => group.id === grandchild.id)?.parent_id, parent.id)
+  assert.deepEqual(listed.find(group => group.id === grandchild.id)?.post_ids, ['post-a'])
+
+  // A collection cannot be nested inside one that owns another space.
+  const spaceA = repository.save({ name: 'Espacio A', description: '', space: 'Espacio A' })
+  const spaceB = repository.save({ name: 'Espacio B', description: '', space: 'Espacio B' })
+  assert.throws(() => repository.save({ id: String(spaceB.id), name: 'Espacio B', description: '', space: 'Espacio B', parentId: spaceA.id }), /otro espacio/)
+
+  // A collection without a space inherits the parent's space.
+  const inheriting = repository.save({ name: 'Hereda', description: '', space: '', parentId: spaceA.id })
+  assert.equal(inheriting.space, 'Espacio A')
+
+  // Re-saving without parentId preserves the existing nesting.
+  const renamed = repository.save({ id: String(inheriting.id), name: 'Hereda renombrada', description: '', space: 'Espacio A' })
+  assert.equal(renamed.parent_id, spaceA.id)
+})

@@ -3,7 +3,7 @@ import { Archive, BookOpen, Download, ExternalLink, FolderOpen, Globe2, RefreshC
 import { reportAppError, runWithErrorReporting } from '../../app/errors'
 import { ViewHeading } from '../../components/layout/AppShell'
 import { MobileAppDownload } from '../../components/MobileAppDownload'
-import type { AppResourceUsage, SystemInfo, UpdateState } from '../../shared/types'
+import type { AppBehavior, AppResourceUsage, SystemInfo, UpdateState } from '../../shared/types'
 import { MobileSyncSettings } from './MobileSyncSettings'
 import { OptionalIntegrations } from './OptionalIntegrations'
 import './about-updates.css'
@@ -28,6 +28,7 @@ export function AboutUpdates() {
   const [update, setUpdate] = useState<UpdateState | null>(null)
   const [backupMessage, setBackupMessage] = useState('')
   const [notesOpen, setNotesOpen] = useState(false)
+  const [behavior, setBehavior] = useState<AppBehavior | null>(null)
   const [showCollectionDate, setShowCollectionDate] = useState(() => { try { return localStorage.getItem('caballocci.collection-label-date') === 'true' } catch { return false } })
 
   useEffect(() => {
@@ -35,6 +36,9 @@ export function AboutUpdates() {
       setInfo(system)
       setUpdate(state)
     }).catch(error => reportAppError(error, 'No se pudo cargar la información de la aplicación'))
+    window.planner.system.getBehavior()
+      .then(setBehavior)
+      .catch(error => reportAppError(error, 'No se pudo cargar el comportamiento de la ventana'))
     return window.planner.updates.onStateChange(setUpdate)
   }, [])
   useEffect(() => {
@@ -61,6 +65,15 @@ export function AboutUpdates() {
     setBackupMessage(`Backup creado: ${backupPath}`)
   }
 
+  const toggleBehavior = (key: keyof AppBehavior) => {
+    if (!behavior) return
+    const next = { ...behavior, [key]: !behavior[key] }
+    setBehavior(next)
+    void runWithErrorReporting(async () => {
+      setBehavior(await window.planner.system.setBehavior({ [key]: next[key] }))
+    }, 'No se pudo guardar el comportamiento')
+  }
+
   const busy = update?.status === 'checking' || update?.status === 'downloading' || update?.status === 'installing'
   return <section className="workspace about-workspace">
     <ViewHeading title="Acerca de / Actualizaciones" subtitle="Versión, datos locales y actualizaciones de caballocci." />
@@ -69,6 +82,12 @@ export function AboutUpdates() {
         <div className="settings-heading"><div><span>PERSONALIZACIÓN</span><h2>Etiquetas de colecciones</h2></div></div>
         <p className="settings-note">Elige qué información aparece junto a cada colección en la navegación lateral.</p>
         <label className="collection-date-setting"><input type="checkbox" checked={showCollectionDate} onChange={event => { const checked = event.target.checked; setShowCollectionDate(checked); try { localStorage.setItem('caballocci.collection-label-date', String(checked)) } catch { /* La preferencia es opcional. */ } window.dispatchEvent(new Event('caballocci-collection-label-change')) }} /><span><strong>Mostrar fecha de creación</strong><small>Desactivado: nombre y cantidad. Activado: nombre, fecha y cantidad.</small></span></label>
+      </section>
+      <section className="settings-section">
+        <div className="settings-heading"><div><span>BANDEJA Y ARRANQUE</span><h2>Ventana y bandeja</h2></div></div>
+        <p className="settings-note">Controla qué ocurre al pulsar cerrar y si caballocci se inicia con el sistema. También puedes abrir una nota rápida en cualquier momento con Ctrl+Alt+N.</p>
+        <label className="collection-date-setting"><input type="checkbox" checked={behavior?.closeToTray ?? true} disabled={!behavior} onChange={() => toggleBehavior('closeToTray')} /><span><strong>Minimizar a la bandeja al cerrar</strong><small>Activado (por defecto): pulsar cerrar oculta caballocci en la bandeja del sistema. Para salir, usa el menú de la bandeja o desactiva esta opción. Desactivado: doble cierre para salir, como antes.</small></span></label>
+        <label className="collection-date-setting"><input type="checkbox" checked={behavior?.autostart ?? false} disabled={!behavior} onChange={() => toggleBehavior('autostart')} /><span><strong>Iniciar con Windows</strong><small>Desactivado por defecto. Si lo activas, caballocci se abre al iniciar sesión.</small></span></label>
       </section>
       <section className="settings-section">
         <div className="settings-heading"><div><span>APLICACIÓN</span><h2>caballocci</h2></div><strong>v{info?.version || update?.installedVersion || '...'}</strong></div>

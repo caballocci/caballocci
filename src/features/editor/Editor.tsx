@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Archive, ChevronLeft, ChevronRight, Copy, Database, Edit3, ExternalLink, FileImage, FolderOpen, FolderPlus, GripVertical, Hash, Instagram, Lightbulb, MessageCircle, MoreHorizontal, Plus, Redo2, Smartphone, Sparkles, StickyNote, Trash2, Undo2, X } from 'lucide-react'
 import { contentLabels, getPlatformMeta, platformMeta, statusMeta } from '../../shared/constants'
+import { formatLocalDate } from '../../shared/date'
 import { PlatformMark } from '../../components/layout/AppShell'
 import { MobileAppDownload } from '../../components/MobileAppDownload'
 import { reportAppError, runWithErrorReporting } from '../../app/errors'
@@ -62,6 +63,8 @@ export function Editor({ initial, scheduledAtForNew = null, spaceForNew, collect
   }, [draft.id, mediaAttachment, setDraft])
   const projectOptions = Array.from(new Set([...customSpaces, ...posts.map(post => post.project), draft.project].filter(Boolean)))
   const sessionIndex = sessionPosts.findIndex(post => post.id === initial?.id)
+  // Fecha de creación: la del post guardado, o la del draft recién persistido (posts se actualiza tras guardar).
+  const createdAt = initial?.createdAt ?? posts.find(post => post.id === draft.id)?.createdAt ?? null
   const lastSavedDraft = useRef(JSON.stringify(initialDraft))
   const draftRef = useRef(draft)
   draftRef.current = draft
@@ -529,7 +532,7 @@ export function Editor({ initial, scheduledAtForNew = null, spaceForNew, collect
       {externalRecord && <button type="button" aria-pressed={tab === 'external'} className={tab === 'external' ? 'active' : ''} onClick={() => setTab('external')}><Database size={13} /> Datos externos</button>}
       {initial && <button type="button" aria-pressed={tab === 'catalog'} className={tab === 'catalog' ? 'active' : ''} onClick={() => setTab('catalog')}><Database size={13} /> Catálogo</button>}
     </div>
-    <div className="post-title-toolbar"><span>Título rápido</span><button type="button" onClick={() => formatPostTitle('upper')}>MAYÚS</button><button type="button" onClick={() => formatPostTitle('lower')}>minús</button><button type="button" onClick={() => formatPostTitle('title')}>Título</button><button type="button" onClick={() => formatPostTitle('sentence')}>Oración</button></div>
+    <div className="post-title-toolbar"><span>Título rápido</span>{createdAt && <span className="post-created-at" title="Fecha de creación de la publicación">Creada el {formatLocalDate(createdAt)}</span>}<button type="button" onClick={() => formatPostTitle('upper')}>MAYÚS</button><button type="button" onClick={() => formatPostTitle('lower')}>minús</button><button type="button" onClick={() => formatPostTitle('title')}>Título</button><button type="button" onClick={() => formatPostTitle('sentence')}>Oración</button></div>
     <div className="editor-body">
       {tab === 'content' && <>
         <label>Título<input data-undo-control value={draft.title} onChange={e => update('title', e.target.value, { label: 'Editar título', groupKey: 'post:title' })} placeholder="Nombra esta pieza de contenido" /></label>

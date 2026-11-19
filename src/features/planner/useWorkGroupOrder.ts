@@ -29,14 +29,16 @@ export function useWorkGroupOrder() {
     return [...groups].sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER))
   }, [order])
 
-  const moveGroup = useCallback((groups: WorkGroup[], draggedId: string, targetId: string) => {
+  const moveGroup = useCallback((groups: WorkGroup[], draggedId: string, targetId: string, position: 'before' | 'after' = 'before') => {
     if (draggedId === targetId) return
     const visibleIds = orderedGroups(groups).map(group => group.id)
     const from = visibleIds.indexOf(draggedId)
     const to = visibleIds.indexOf(targetId)
     if (from < 0 || to < 0) return
 
-    visibleIds.splice(to, 0, visibleIds.splice(from, 1)[0])
+    visibleIds.splice(from, 1)
+    const insertAt = visibleIds.indexOf(targetId) + (position === 'after' ? 1 : 0)
+    visibleIds.splice(insertAt, 0, draggedId)
     const nextOrder = [...order]
     for (const group of groups) if (!nextOrder.includes(group.id)) nextOrder.push(group.id)
     const visibleSet = new Set(groups.map(group => group.id))

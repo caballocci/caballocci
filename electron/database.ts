@@ -141,7 +141,6 @@ export class PlannerDatabase {
   restoreMedia(assetIds: string[], managedRoot: string) { return this.mediaCompression.restore(assetIds, managedRoot) }
   compressedMediaIds() { return this.mediaCompression.compressedIds() }
   compressedMediaIdsForTarget(targetType: 'group' | 'post', targetId: string) { return this.mediaCompression.assetIdsForTarget(targetType, targetId) }
-  getMediaCompressionState(id: string) { return this.mediaCompression.state(id) }
 
   savePreferences(entries: Record<string, string>) {
     this.preferences.save(entries)
@@ -237,8 +236,8 @@ export class PlannerDatabase {
     this.posts.remove(id)
   }
 
-  reassignProject(fromProject: string, toProject: string) {
-    this.posts.reassignProject(fromProject, toProject)
+  reassignProject(fromProject: string, toProject: string, options?: { keepStacks?: boolean }) {
+    this.posts.reassignProject(fromProject, toProject, options)
   }
 
   listIdeas(): Row[] {
