@@ -6,6 +6,7 @@ import { postColors } from '../../shared/postColors'
 import type { PostInterestLevel } from '../../shared/post-marks'
 import type { ContentType, Post } from '../../shared/types'
 import { MobileCardStatus, MobileStackStatus, PostMarkBadges, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
+import type { StackDropHover } from './stack-drop-zone'
 
 export const stackContentIcon = (contentType: ContentType) => contentType === 'reel' ? Film : contentType === 'carousel' ? Images : FileText
 
@@ -24,7 +25,7 @@ export type StackHandlers = {
   drop(event: React.DragEvent<HTMLElement>, post: Post, status: Post['status']): void
   startMemberDrag(event: React.DragEvent<HTMLElement>, member: Post, stackId: string): void
   endMemberDrag(): void
-  memberDragOver(event: React.DragEvent<HTMLElement>, member: Post, stackId: string, index: number): void
+  memberDragOver(event: React.DragEvent<HTMLElement>, member: Post, stackId: string): void
   memberDrop(event: React.DragEvent<HTMLElement>, member: Post, stackId: string): void
   containerDragOver(event: React.DragEvent<HTMLElement>, items: Post[], status: Post['status']): void
   containerDragLeave(event: React.DragEvent<HTMLElement>, stackId: string): void
@@ -83,6 +84,7 @@ export function StackClosedCard({ items, stackId, columnStatus, selected, draggi
     onDragStart={event => handlers.startDrag(event, top)}
     onDragEnd={handlers.endDrag}
     onDragOver={event => handlers.dragOver(event, top, columnStatus)}
+    onDragEnter={event => handlers.dragOver(event, top, columnStatus)}
     onDragLeave={() => handlers.dragLeave(top.id)}
     onDrop={event => handlers.drop(event, top, columnStatus)}
     onContextMenu={event => handlers.openContextMenu(event, top, memberIds)}
@@ -120,22 +122,26 @@ export function StackClosedCard({ items, stackId, columnStatus, selected, draggi
 }
 
 /** Lista expandida e interactiva de la pila, con acciones sobre el conjunto en el header. */
-export function StackExpandedList({ items, stackId, columnStatus, selected, dragging, dateMarks, interestLevels, mobilePublicationState, boardCardDetailLevel, containerTarget, dropTarget, reorder, handlers }: StackSharedProps & {
+export function StackExpandedList({ items, stackId, columnStatus, selected, dragging, dateMarks, interestLevels, mobilePublicationState, boardCardDetailLevel, hoverZone, unstackable, handlers }: StackSharedProps & {
   items: Post[]
   stackId: string
   columnStatus: Post['status']
-  containerTarget: boolean
-  dropTarget: string | null
-  reorder: { stackId: string; index: number } | null
+  /** Zona bajo el puntero, ya filtrada a esta pila: decide el marco de desapilado y el reordenamiento. */
+  hoverZone: StackDropHover | null
+  /** Hay un miembro de esta pila arrastrándose: el marco de desapilado se muestra como affordance. */
+  unstackable: boolean
 }) {
   const orderIds = items.map(member => member.id)
   const allSelected = orderIds.every(id => selected.has(id))
   const someSelected = orderIds.some(id => selected.has(id))
+  const hoveringUnstack = hoverZone?.kind === 'unstack'
+  const hoveringStack = hoverZone?.kind === 'stack'
   return <div
-    className={`board-stack-expanded${containerTarget ? ' stack-drop-target' : ''}`}
+    className={`board-stack-expanded${hoveringStack ? ' stack-drop-target' : ''}${unstackable ? ' stack-unstack-armed' : ''}${hoveringUnstack ? ' stack-unstack-target' : ''}`}
     role="list"
     aria-label={`Pila de ${items.length} publicaciones`}
     onDragOver={event => handlers.containerDragOver(event, items, columnStatus)}
+    onDragEnter={event => handlers.containerDragOver(event, items, columnStatus)}
     onDragLeave={event => handlers.containerDragLeave(event, stackId)}
     onDrop={event => handlers.containerDrop(event, items, columnStatus)}
   >
@@ -147,17 +153,19 @@ export function StackExpandedList({ items, stackId, columnStatus, selected, drag
       <button type="button" className="board-stack-actions" aria-label="Acciones de la pila" title="Acciones de la pila" onClick={event => handlers.openContextMenu(event, items[0], orderIds)}><MoreHorizontal size={14} /></button>
       <button type="button" className="board-stack-collapse" aria-label="Colapsar pila" title="Colapsar pila" onClick={() => handlers.toggleExpand(stackId)}><ChevronUp size={14} /></button>
     </div>
-    {items.map((member, index) => <div
+    <div className="board-stack-unstack-label" aria-hidden="true">Sacar de la pila</div>
+    {items.map(member => <div
       key={member.id}
       role="listitem"
-      className={`board-stack-member${member.color !== postColors[0].value ? ' has-custom-color' : ''}${selected.has(member.id) ? ' selected' : ''}${dragging.has(member.id) ? ' is-dragging' : ''}${dropTarget === member.id ? ' stack-drop-target' : ''}${reorder?.stackId === stackId && reorder.index === index ? ' reorder-over-top' : ''}${reorder?.stackId === stackId && reorder.index === index + 1 ? ' reorder-over-bottom' : ''}`}
+      className={`board-stack-member${member.color !== postColors[0].value ? ' has-custom-color' : ''}${selected.has(member.id) ? ' selected' : ''}${dragging.has(member.id) ? ' is-dragging' : ''}${hoverZone?.kind === 'insert' && hoverZone.targetId === member.id && hoverZone.before ? ' reorder-over-top' : ''}${hoverZone?.kind === 'insert' && hoverZone.targetId === member.id && !hoverZone.before ? ' reorder-over-bottom' : ''}`}
       data-area-select-id={member.id}
       tabIndex={0}
       draggable
       style={{ '--post-color': member.color } as React.CSSProperties}
       onDragStart={event => handlers.startMemberDrag(event, member, stackId)}
       onDragEnd={handlers.endMemberDrag}
-      onDragOver={event => handlers.memberDragOver(event, member, stackId, index)}
+      onDragOver={event => handlers.memberDragOver(event, member, stackId)}
+      onDragEnter={event => handlers.memberDragOver(event, member, stackId)}
       onDrop={event => handlers.memberDrop(event, member, stackId)}
       onContextMenu={event => handlers.openContextMenu(event, member)}
       onMouseEnter={event => flagTruncatedTitle(event.currentTarget)}

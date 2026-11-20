@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react'
 import { Archive, ArchiveRestore, ArrowLeft, Eraser, FolderOpen, FolderPlus, Inbox, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { Post, WorkGroup } from '../../shared/types'
 import { childrenByParent, groupPath, isDescendant, subtreePostIds } from '../../shared/work-group-tree'
@@ -27,6 +27,22 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
   const [draggingPosts, setDraggingPosts] = useState(false)
   const [draggingCollectionId, setDraggingCollectionId] = useState<string | null>(null)
   const { nestWorkGroup, reorderSibling } = useWorkGroupNesting()
+  // La affordance de colecciones se enciende desde el `dragstart`, no desde el primer
+  // `dragover` de una pestaña: con colecciones anidadas, el destino tiene que verse
+  // mientras se busca, no recién cuando el puntero ya está encima.
+  useEffect(() => {
+    const isPostDrag = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('application/x-caballocci-post-ids')
+    const onDragStart = (event: DragEvent) => { if (isPostDrag(event)) setDraggingPosts(true) }
+    const onDragEnd = () => setDraggingPosts(false)
+    document.addEventListener('dragstart', onDragStart)
+    document.addEventListener('dragend', onDragEnd)
+    document.addEventListener('drop', onDragEnd)
+    return () => {
+      document.removeEventListener('dragstart', onDragStart)
+      document.removeEventListener('dragend', onDragEnd)
+      document.removeEventListener('drop', onDragEnd)
+    }
+  }, [])
   useEffect(() => {
     if (!collectionMenu) return
     const dismiss = () => setCollectionMenu(null)
@@ -48,7 +64,7 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
   const countPostsIn = (group: WorkGroup) => posts.filter(post => post.status !== 'archived' && subtreeSets.get(group.id)?.has(post.id)).length
   const unassignedCount = posts.filter(post => post.status !== 'archived' && !activeGroups.some(group => group.postIds.includes(post.id))).length
   const collectionDropProps = (group: WorkGroup) => ({
-    onDragOver: (event: DragEvent<HTMLDivElement>) => {
+    onDragOver: (event: ReactDragEvent<HTMLDivElement>) => {
       const types = Array.from(event.dataTransfer.types)
       const isPostDrag = types.includes('application/x-caballocci-post-ids')
       if (isPostDrag) {
@@ -64,14 +80,12 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
       applyCollectionDropClasses(event.currentTarget, zone)
       event.currentTarget.dataset.dropZone = zone
     },
-    onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+    onDragLeave: (event: ReactDragEvent<HTMLDivElement>) => {
       clearCollectionDropClasses(event.currentTarget)
       event.currentTarget.classList.remove('drag-over', 'post-drag-over')
       delete event.currentTarget.dataset.dropZone
-      if (event.relatedTarget instanceof Node && event.currentTarget.parentElement?.contains(event.relatedTarget)) return
-      setDraggingPosts(false)
     },
-    onDrop: (event: DragEvent<HTMLDivElement>) => {
+    onDrop: (event: ReactDragEvent<HTMLDivElement>) => {
       event.preventDefault(); clearCollectionDropClasses(event.currentTarget); setDraggingPosts(false)
       const target = event.currentTarget
       const draggedId = event.dataTransfer.getData(workGroupDragType)
@@ -93,7 +107,7 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
       onDropPosts(group.id, ids)
     },
   })
-  return <nav className="board-collection-nav" aria-label="Colecciones">
+  return <nav className={`board-collection-nav${draggingPosts ? ' post-drag-active' : ''}`} aria-label="Colecciones">
     {selectedWorkGroup && <div className="board-collection-breadcrumb" role="navigation" aria-label="Nivel de colección">
       <button type="button" onClick={() => setActiveWorkGroup(null)}>Colecciones</button>
       {path.map((crumb, index) => <span key={crumb.id}><em aria-hidden="true">›</em><button type="button" className={index === path.length - 1 ? 'active' : ''} onClick={() => setActiveWorkGroup(crumb.id)}>{crumb.name}</button></span>)}

@@ -28,6 +28,9 @@
 .board-collection-item-menu:hover { background: #252e28; color: #e8eee9; }
 .board-collection-item-menu:focus-visible { opacity: 1; }
 .board-collection-drop-guidance { flex: none; padding: 5px 8px; border: 1px solid #554929; border-radius: 5px; background: #211f19; color: #d2c2a1; font-size: 10px; }
+/* Arrastre de publicaciones en curso: las colecciones se ofrecen como destino desde el
+   `dragstart`, antes de que el puntero pase por encima. */
+.board-collection-nav.post-drag-active .board-collection-item .board-collection-tab:not([aria-current="page"]) { border-style: dashed; border-color: color-mix(in srgb, #d0a64b 45%, var(--pill-border)); }
 .board-collection-item.post-drag-over .board-collection-tab { border-color: #d0a64b; background: #282419; box-shadow: 0 0 0 2px #d0a64b38; color: #f1f5f2; }
 .board-collection-divider { flex: none; width: 1px; height: 18px; margin: 0 6px; background: #2d3730; }
 .board-collection-add { margin-left: 2px; width: 44px; padding: 0; }
