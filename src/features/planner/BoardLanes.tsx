@@ -7,6 +7,7 @@ import { BoardContextMenu, BoardContextSelectionActions } from './BoardContextMe
 import { PostCopyDialog } from './PostCopyDialog'
 import { ApplyFieldsDialog } from './ApplyFieldsDialog'
 import { reorderStackIds, resolveStackDropZone, type StackDropHover } from './stack-drop-zone'
+import { nearestDropCell, type BoardDropCell } from './board-drop-magnet'
 import { PasteFormatHint } from './PasteFormatHint'
 import { availableParsedFields, groupPayloadPosts, isStructuredPostText, parsePostsFromText, readClipboardPayload, type ClipboardPasteSource, type ClipboardPostField, type ParsedPost } from '../../shared/clipboard-payload'
 import { format, parseISO } from 'date-fns'
@@ -85,6 +86,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
   const [applyTargets, setApplyTargets] = useState<Post[]>([])
   const [justPastedIds, setJustPastedIds] = useState<Set<string>>(() => new Set())
   const pastedFeedbackTimer = useRef<number | null>(null)
+  const lanesRef = useRef<HTMLDivElement | null>(null)
   const [openCells, setOpenCells] = useState<Set<string>>(new Set())
   const [duplicatedPostId, setDuplicatedPostId] = useState<string | null>(null)
   const duplicateFeedbackTimer = useRef<number | null>(null)
@@ -120,6 +122,13 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     setStackDragMember(null)
   }, [])
 
+  const moveDraggedTo = useCallback((status: Post['status']) => {
+    const member = stackDragMember
+    resetDrag()
+    onMove(status)
+    if (member) void runWithErrorReporting(() => usePlanner.getState().unstackPost(member.id), 'No se pudo desapilar')
+  }, [onMove, resetDrag, stackDragMember])
+
   // Recordar qué pilas quedaron abiertas entre recargas y cambios de vista.
   useEffect(() => {
     try { localStorage.setItem('caballocci.expanded-stacks', JSON.stringify([...expandedStacks])) } catch { /* almacenamiento no disponible */ }
@@ -131,6 +140,49 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     window.addEventListener('drop', resetDrag)
     return () => { window.removeEventListener('dragend', resetDrag); window.removeEventListener('drop', resetDrag) }
   }, [resetDrag])
+
+  // Imán de columna: el DnD nativo solo dispara `drop` donde alguien hizo `preventDefault`
+  // en `dragover`. En los huecos entre columnas y márgenes del tablero no hay receptor,
+  // así que elegimos la celda más cercana y aplicamos el mismo move que haría la celda.
+  const boardDragRef = useRef({ moveDraggedTo })
+  useEffect(() => { boardDragRef.current = { moveDraggedTo } })
+  useEffect(() => {
+    const boardRoot = () => lanesRef.current?.parentElement ?? null
+    const hasPostDrag = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes(POST_IDS_MIME)
+    const insideBoard = (event: DragEvent) => {
+      const rect = boardRoot()?.getBoundingClientRect()
+      return Boolean(rect && event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom)
+    }
+    const cellsUnderPointer = (): BoardDropCell[] => {
+      const root = boardRoot()
+      if (!root) return []
+      return Array.from(root.querySelectorAll<HTMLElement>('.board-lane-cell[data-status]')).flatMap(cell => {
+        const rect = cell.getBoundingClientRect()
+        const key = cell.dataset.cellKey
+        const status = cell.dataset.status as PostStatus | undefined
+        return key && status ? [{ key, status, rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } }] : []
+      })
+    }
+    const onDragOver = (event: DragEvent) => {
+      if (!hasPostDrag(event) || event.defaultPrevented || !insideBoard(event)) return
+      const target = nearestDropCell(cellsUnderPointer(), event.clientX, event.clientY)
+      if (!target) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+      setHover(null)
+      setDropTarget(current => current?.key === target.key ? current : target)
+    }
+    const onDrop = (event: DragEvent) => {
+      if (!hasPostDrag(event) || event.defaultPrevented || !insideBoard(event)) return
+      const target = nearestDropCell(cellsUnderPointer(), event.clientX, event.clientY)
+      if (!target) return
+      event.preventDefault()
+      boardDragRef.current.moveDraggedTo(target.status)
+    }
+    document.addEventListener('dragover', onDragOver)
+    document.addEventListener('drop', onDrop)
+    return () => { document.removeEventListener('dragover', onDragOver); document.removeEventListener('drop', onDrop) }
+  }, [])
 
   useEffect(() => {
     if (!context) return
@@ -509,7 +561,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     unstack: member => runStackUndoable('Publicación desapilada', 'No se pudo desapilar', () => usePlanner.getState().unstackPost(member.id)),
   }
 
-  return <><div className={`board-lanes${selected.size ? ' selection-active' : ''}${dragging.size ? ' is-dragging-cards' : ''}`} role="grid" aria-label="Tablero Kanban por etapas">
+  return <><div ref={lanesRef} className={`board-lanes${selected.size ? ' selection-active' : ''}${dragging.size ? ' is-dragging-cards' : ''}`} role="grid" aria-label="Tablero Kanban por etapas">
     {stages.map(status => {
       const ids = statusIds.get(status) || []
       const selectedCount = ids.filter(id => selected.has(id)).length
@@ -605,6 +657,8 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
             className={cellClass}
             style={{ '--status-color': statusMeta[status].color } as React.CSSProperties}
             role="gridcell"
+            data-cell-key={cellKey}
+            data-status={status}
             key={cellKey}
             onDragOver={event => {
               if (!carriesPosts(event)) return
@@ -619,10 +673,8 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
             }}
             onDrop={event => {
               if (!carriesPosts(event)) return
-              const member = stackDragMember
-              resetDrag()
-              onMove(status)
-              if (member) void runWithErrorReporting(() => usePlanner.getState().unstackPost(member.id), 'No se pudo desapilar')
+              event.preventDefault() // El fallback de tablero solo actúa si nadie aceptó el drop.
+              moveDraggedTo(status)
             }}
           >
             {visibleRenderItems.map(item => {
