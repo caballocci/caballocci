@@ -14,7 +14,7 @@ import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ArrowDown, ArrowUp, CalendarClock, CalendarDays, ChevronDown, ChevronRight, ChevronsRight, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers3, MoreHorizontal, Network, Plus, Replace, Trash2 } from 'lucide-react'
 import { contentLabels, stages, statusMeta } from '../../shared/constants'
-import { postColors } from '../../shared/postColors'
+import { DEFAULT_POST_COLOR, isDefaultPostColor, postAccentColor, postColors } from '../../shared/postColors'
 import { interestLevelLabels, interestLevelNames, type PostInterestLevel } from '../../shared/post-marks'
 import { runWithErrorReporting } from '../../app/errors'
 import { usePlanner } from '../../app/store'
@@ -125,8 +125,13 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
   const moveDraggedTo = useCallback((status: Post['status']) => {
     const member = stackDragMember
     resetDrag()
-    onMove(status)
-    if (member) void runWithErrorReporting(() => usePlanner.getState().unstackPost(member.id), 'No se pudo desapilar')
+    if (!member) { onMove(status); return }
+    void runWithErrorReporting(async () => {
+      const post = usePlanner.getState().posts.find(item => item.id === member.id)
+      if (!post) return
+      if (post.status === status) await usePlanner.getState().unstackPost(member.id)
+      else await usePlanner.getState().save({ ...post, status })
+    }, 'No se pudo mover la publicación')
   }, [onMove, resetDrag, stackDragMember])
 
   // Recordar qué pilas quedaron abiertas entre recargas y cambios de vista.
@@ -262,6 +267,17 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     }, errorMessage)
   }
 
+  /** Al soltar sobre una pila de otra columna, primero alinea la etapa y después apila. */
+  const stackDraggedOn = (targetId: string, targetStatus: Post['status'], ids: string[]) => runStackUndoable(
+    'Publicación movida y apilada', 'No se pudo mover y apilar la publicación', async () => {
+      for (const id of ids) {
+        const post = usePlanner.getState().posts.find(item => item.id === id)
+        if (post && post.status !== targetStatus) await usePlanner.getState().save({ ...post, status: targetStatus })
+      }
+      await usePlanner.getState().stackPosts(targetId, ids)
+    },
+  )
+
   const undoStackChange = () => {
     const pending = stackUndo
     if (stackUndoTimer.current !== null) { window.clearTimeout(stackUndoTimer.current); stackUndoTimer.current = null }
@@ -280,8 +296,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
 
   const toggleStackExpand = (stackId: string) => runStackTransition(() => setExpandedStacks(current => { const next = new Set(current); if (next.has(stackId)) next.delete(stackId); else next.add(stackId); return next }))
 
-  /** Las publicaciones de la celda objetivo están en la misma columna que las arrastradas;
-      si alguna arrastrada está en otra columna, nunca apila: mueve. */
+  /** Comprueba si las publicaciones arrastradas ya están en la etapa destino. */
   const canStackOn = (targetStatus: Post['status']) => {
     const ids = dragIds.current
     if (!ids.length) return false
@@ -314,7 +329,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
       focusHover(null)
       return
     }
-    if (post.status !== columnStatus || !canStackOn(columnStatus)) return // otra columna: la tarjeta nunca apila, mueve
+    if (post.status !== columnStatus) return
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
@@ -331,11 +346,11 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     if (zone.kind === 'move') return // deja pasar a la celda (mover de columna)
     event.stopPropagation()
     if (zone.kind === 'self') return // sin drop: `dragend` limpia el estado
-    if (post.status !== columnStatus || !canStackOn(columnStatus)) return
-    event.preventDefault()
     const ids = dragIds.current
     if (!ids.length) return
-    runStackUndoable('Publicaciones apiladas', 'No se pudo apilar', () => usePlanner.getState().stackPosts(post.id, ids))
+    event.preventDefault()
+    if (canStackOn(columnStatus)) runStackUndoable('Publicaciones apiladas', 'No se pudo apilar', () => usePlanner.getState().stackPosts(post.id, ids))
+    else stackDraggedOn(post.id, columnStatus, ids)
     resetDrag()
   }
 
@@ -372,7 +387,6 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
       focusHover(null)
       return
     }
-    if (!sameStack && !canStackOn(member.status)) return
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'move'
@@ -400,7 +414,6 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
       void runStackUndoable('Publicación desapilada', 'No se pudo desapilar', () => usePlanner.getState().unstackPost(dragged.id))
       return
     }
-    if (!canStackOn(member.status)) { resetDrag(); return }
     if (sameStack && dragged) {
       // Reordenar dentro de la pila con la lista completa en orden actual.
       if (zone.kind === 'insert') {
@@ -414,7 +427,8 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     // Añadir a la pila abierta (miembros de otras pilas o publicaciones sueltas).
     const ids = dragIds.current
     if (!ids.length) { resetDrag(); return }
-    void runStackUndoable('Publicaciones apiladas', 'No se pudo apilar', () => usePlanner.getState().stackPosts(member.id, ids))
+    if (canStackOn(member.status)) runStackUndoable('Publicaciones apiladas', 'No se pudo apilar', () => usePlanner.getState().stackPosts(member.id, ids))
+    else stackDraggedOn(member.id, member.status, ids)
     resetDrag()
   }
 
@@ -430,8 +444,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
       targetStackId: sameStack ? stackId : null,
     })
     if (zone.kind === 'move') return
-    // Pila que no admite el arrastre (otra columna): deja pasar a la celda para mover.
-    if (!sameStack && !canStackOn(columnStatus)) return
+    // El marco de la pila de origen desapila; su fondo no cambia el destino.
     event.stopPropagation()
     if (sameStack) {
       // El fondo de la propia pila no es un destino: se queda como está, sin resalte.
@@ -481,12 +494,12 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
       void runStackUndoable('Publicación desapilada', 'No se pudo desapilar', () => usePlanner.getState().unstackPost(dragged.id))
       return
     }
-    if (!canStackOn(columnStatus)) { resetDrag(); return }
     // Reordenar dentro de la misma pila se resuelve soltando sobre un miembro, no sobre el fondo.
     if (!target || sameStack) { resetDrag(); return }
     const ids = dragIds.current
     if (!ids.length) { resetDrag(); return }
-    void runStackUndoable('Publicaciones apiladas', 'No se pudo apilar', () => usePlanner.getState().stackPosts(target.id, ids))
+    if (canStackOn(columnStatus)) runStackUndoable('Publicaciones apiladas', 'No se pudo apilar', () => usePlanner.getState().stackPosts(target.id, ids))
+    else stackDraggedOn(target.id, columnStatus, ids)
     resetDrag()
   }
 
@@ -559,6 +572,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     containerDragLeave: stackContainerDragLeave,
     containerDrop: stackContainerDrop,
     unstack: member => runStackUndoable('Publicación desapilada', 'No se pudo desapilar', () => usePlanner.getState().unstackPost(member.id)),
+    renameStack: (stackId, name) => { void runWithErrorReporting(() => usePlanner.getState().renameStack(stackId, name), 'No se pudo renombrar la pila') },
   }
 
   return <><div ref={lanesRef} className={`board-lanes${selected.size ? ' selection-active' : ''}${dragging.size ? ' is-dragging-cards' : ''}`} role="grid" aria-label="Tablero Kanban por etapas">
@@ -618,12 +632,12 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
             const otherMemberships = activeGroups.filter(group => group.id !== lane.group?.id && group.postIds.includes(post.id)).map(group => group.name)
             const overdue = (post.status === 'idea' || post.status === 'draft') && post.scheduledAt && parseISO(post.scheduledAt).getTime() < Date.now()
             const ContentIcon = post.contentType === 'reel' ? Film : post.contentType === 'carousel' ? Images : FileText
-            const cardClass = `board-card${selected.has(post.id) ? ' selected' : ''}${pickedPostIds.has(post.id) ? ' session-picked' : ''}${post.color !== postColors[0].value ? ' has-custom-color' : ''}${dragging.has(post.id) ? ' is-dragging' : ''}${duplicatedPostId === post.id || justPastedIds.has(post.id) ? ' just-duplicated' : ''}`
+            const cardClass = `board-card${selected.has(post.id) ? ' selected' : ''}${pickedPostIds.has(post.id) ? ' session-picked' : ''}${!isDefaultPostColor(post.color) ? ' has-custom-color' : ''}${dragging.has(post.id) ? ' is-dragging' : ''}${duplicatedPostId === post.id || justPastedIds.has(post.id) ? ' just-duplicated' : ''}`
             return <article
               data-area-select-id={post.id}
               tabIndex={0}
               className={cardClass}
-              style={{ '--post-color': post.color } as React.CSSProperties}
+              style={{ '--post-color': postAccentColor(post.color) } as React.CSSProperties}
               draggable
               onDragStart={event => startDrag(event, post)}
               onDragEnd={() => { dragIds.current = []; resetDrag() }}
@@ -687,8 +701,8 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
               </div>
               if (expandedStacks.has(item.stackId)) return <div className="board-card-slot board-stack-slot expanded" key={item.key} style={{ viewTransitionName: stackViewName }}><StackExpandedList items={item.items} stackId={item.stackId} columnStatus={status} selected={selected} dragging={dragging} dateMarks={dateMarks} interestLevels={interestLevels} mobilePublicationState={mobilePublicationState} boardCardDetailLevel={boardCardDetailLevel} hoverZone={hoverZone?.stackId === item.stackId ? hoverZone : null} unstackable={stackDragMember?.stackId === item.stackId} handlers={stackHandlers} /></div>
               // Las capas de atrás usan el color de los miembros 2 y 3 (si tienen uno propio), y su cantidad refleja el tamaño real.
-              const layerColor1 = item.items[1] && item.items[1].color !== postColors[0].value ? item.items[1].color : undefined
-              const layerColor2 = item.items[2] && item.items[2].color !== postColors[0].value ? item.items[2].color : undefined
+              const layerColor1 = item.items[1] && !isDefaultPostColor(item.items[1].color) ? item.items[1].color : undefined
+              const layerColor2 = item.items[2] && !isDefaultPostColor(item.items[2].color) ? item.items[2].color : undefined
               return <div
                 className={`board-card-slot board-stack-slot stack-closed${hoverZone?.kind === 'stack' && hoverZone.targetId === top.id ? ' stack-drop-target' : ''}`}
                 key={item.key}
@@ -743,10 +757,10 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
       <button type="button" role="menuitem" disabled={!applyPreview} title="Reemplaza los campos y anexa diapositivas de lo copiado" onClick={() => { setApplyTargets(actionIds.map(id => postById.get(id)).filter((post): post is Post => post !== undefined)); close() }}><Replace size={14} />{actionIds.length > 1 ? `Aplicar contenido a ${actionIds.length} publicaciones…` : 'Aplicar contenido copiado…'}</button>
       <button type="button" role="menuitem" aria-expanded={showStatuses} onClick={() => setShowStatuses(value => !value)}><MoreHorizontal size={14} />Cambiar etapa…</button>
       {showStatuses && <div className="board-context-statuses" role="group" aria-label="Cambiar etapa">{stages.filter(status => status !== context.post.status && (status !== 'scheduled' || Boolean(context.post.scheduledAt))).map(status => <button type="button" key={status} onClick={() => { onStatus(context.post, status); close(); setShowStatuses(false) }}>{statusMeta[status].label}</button>)}</div>}
-      <button type="button" role="menuitem" aria-expanded={showColors} onClick={() => setShowColors(value => !value)}><span className="board-context-color-icon" style={{ backgroundColor: context.post.color }} />Cambiar color…</button>
+      <button type="button" role="menuitem" aria-expanded={showColors} onClick={() => setShowColors(value => !value)}><span className={`board-context-color-icon${isDefaultPostColor(context.post.color) ? ' is-default' : ''}`} style={{ backgroundColor: isDefaultPostColor(context.post.color) ? 'transparent' : context.post.color }} />Cambiar color…</button>
       {showColors && <div className="board-context-color-options" role="group" aria-label="Colores de tarjeta">
         {postColors.map(color => <button type="button" key={color.value} aria-label={color.label} title={color.label} aria-pressed={context.post.color === color.value} style={{ backgroundColor: color.value }} onClick={() => { onColor(context.post, color.value); close() }} />)}
-        <button type="button" className="board-context-color-reset" aria-pressed={context.post.color === postColors[0].value} onClick={() => { onColor(context.post, postColors[0].value); close() }}>Predeterminado</button>
+        <button type="button" className="board-context-color-reset" aria-pressed={isDefaultPostColor(context.post.color)} onClick={() => { onColor(context.post, DEFAULT_POST_COLOR); close() }}><i aria-hidden="true" />Sin color</button>
       </div>}
     </BoardContextMenu>
   })()}

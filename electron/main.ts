@@ -179,6 +179,7 @@ function registerQuickNoteIpcHandlers() {
     const title = firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine
     try {
       database.saveIdea({ id: crypto.randomUUID(), space: 'Mi contenido', title, body: trimmed, tags: ['nota-rápida'], status: 'inbox', priority: 'normal', sourceName: 'Nota rápida' })
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('planner:quick-note-created')
       return { ok: true as const }
     } catch (error) {
       console.error('No se pudo guardar la nota rápida:', error)
@@ -741,6 +742,7 @@ function mapPost(row: Record<string, unknown>) {
     combinedIdeaIds: parseJsonStringArray(row.combined_idea_ids),
     stackId: row.stack_id ? String(row.stack_id) : null,
     stackPosition: row.stack_position == null ? null : Number(row.stack_position),
+    stackName: row.stack_name ? String(row.stack_name) : null,
     createdAt: row.created_at, updatedAt: row.updated_at,
   }
 }

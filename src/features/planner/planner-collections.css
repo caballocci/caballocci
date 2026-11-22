@@ -130,6 +130,15 @@
 .board-archived-collection-post strong { overflow-wrap: anywhere; font-size: 10px; font-weight: 500; }
 .board-archived-collection-post:hover strong { color: #d0a64b; }
 .board-archived-collection-empty { margin: 0; padding: 8px 30px; color: #87938b; font-size: 9px; }
+/* Paginación y pilas dentro de la sección de archivadas. */
+.board-archived-pager { display: flex; align-items: center; gap: 8px; }
+.board-archived-pager .settings-button { min-height: 26px; height: 26px; font-size: 9px; }
+.board-archived-stack-title { display: inline-flex; align-items: center; gap: 7px; min-width: 0; color: #aeb9b1; }
+.board-archived-stack-title strong { overflow-wrap: anywhere; color: #dce4de; font-size: 10px; }
+.board-archived-stack-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.board-archived-stack-stage { display: inline-flex; align-items: center; gap: 5px; color: #87938b; font-size: 9px; }
+.board-archived-stack-stage select { height: 28px; border: 1px solid #39443c; border-radius: 4px; background: #202722; color: #d1dad3; font-size: 9px; }
+.board-archived-stack-subtitle { margin: 0; padding: 6px 10px 0 30px; color: #87938b; font-size: 9px; }
 .work-group-membership-actions { margin-top: -6px; }
 .work-group-membership-actions select { height: 28px; max-width: 220px; padding: 0 6px; border: 1px solid #6b5840; border-radius: 3px; background: #1b1a17; color: #e8d2b6; font-size: 9px; }
 .work-group-membership-actions button:disabled { opacity: .45; cursor: not-allowed; }

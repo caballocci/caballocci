@@ -24,7 +24,7 @@ test('concept map folders carry a space and nest space folders only under global
   t.after(() => db.close())
   runMigrations(db, false, () => assert.fail('A new database must not require a backup'))
 
-  assert.equal(Number(db.exec('PRAGMA user_version')[0].values[0][0]), 35)
+  assert.ok(Number(db.exec('PRAGMA user_version')[0].values[0][0]) >= 35, 'concept map folder migrations are applied')
   const columns = db.exec('PRAGMA table_info(concept_map_folders)')[0].values.map(row => String(row[1]))
   assert.ok(columns.includes('space'))
 

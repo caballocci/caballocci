@@ -17,7 +17,7 @@
 
 /** Ancho (px) del marco de desapilado dibujado dentro de la pila expandida.
  *  Debe coincidir con `--stack-unstack-frame` en `board-stacks.css`. */
-export const STACK_UNSTACK_FRAME = 12
+export const STACK_UNSTACK_FRAME = 16
 
 export type StackDropZone =
   | { kind: 'stack'; targetId: string; stackId: string | null }

@@ -17,7 +17,7 @@ const { PostsRepository } = require('../../dist-electron/database/posts-reposito
   }
 }
 
-test('post stacks round-trip through migration v34 and PostsRepository', async t => {
+test('post stacks round-trip through migrations v34/v36 and PostsRepository', async t => {
   const SQL = await initSqlJs({ locateFile: file => path.resolve('node_modules/sql.js/dist', file) })
   const db = new SQL.Database()
   t.after(() => db.close())
@@ -26,21 +26,24 @@ test('post stacks round-trip through migration v34 and PostsRepository', async t
   const columns = db.exec('PRAGMA table_info(posts)')[0].values.map(row => String(row[1]))
   assert.ok(columns.includes('stack_id'), 'posts.stack_id exists after migrations')
   assert.ok(columns.includes('stack_position'), 'posts.stack_position exists after migrations')
+  assert.ok(columns.includes('stack_name'), 'posts.stack_name exists after migrations')
   const userVersion = Number(db.exec('PRAGMA user_version')[0].values[0][0])
-  assert.ok(userVersion >= 34, 'post stack migration is applied')
+  assert.ok(userVersion >= 36, 'post stack migrations are applied')
 
   const repository = new PostsRepository(db, () => {}, () => {})
   const noIdea = () => undefined
 
-  repository.save({ id: 'post-a', title: 'Carrusel portada', status: 'draft', project: 'Mi contenido', color: '#ff6b4a', stackId: 'stack-1', stackPosition: 0 }, noIdea)
-  repository.save({ id: 'post-b', title: 'Carrusel slide 2', status: 'draft', project: 'Mi contenido', color: '#ff6b4a', stackId: 'stack-1', stackPosition: 1 }, noIdea)
+  repository.save({ id: 'post-a', title: 'Carrusel portada', status: 'draft', project: 'Mi contenido', color: '#ff6b4a', stackId: 'stack-1', stackPosition: 0, stackName: 'Carrusel lanzamiento' }, noIdea)
+  repository.save({ id: 'post-b', title: 'Carrusel slide 2', status: 'draft', project: 'Mi contenido', color: '#ff6b4a', stackId: 'stack-1', stackPosition: 1, stackName: 'Carrusel lanzamiento' }, noIdea)
   repository.save({ id: 'post-c', title: 'Suelta', status: 'idea', project: 'Mi contenido', color: '#ff6b4a' }, noIdea)
 
   assert.equal(repository.get('post-a')?.stack_id, 'stack-1')
   assert.equal(repository.get('post-a')?.stack_position, 0)
+  assert.equal(repository.get('post-a')?.stack_name, 'Carrusel lanzamiento')
   assert.equal(repository.get('post-b')?.stack_position, 1)
   assert.equal(repository.get('post-c')?.stack_id, null)
   assert.equal(repository.get('post-c')?.stack_position, null)
+  assert.equal(repository.get('post-c')?.stack_name, null)
 
   const listed = repository.list()
   const byId = new Map(listed.map(row => [String(row.id), row]))

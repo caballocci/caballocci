@@ -62,6 +62,9 @@
 .board-stack-summary-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Contador de miembros ocultos: visible en reposo, junto al título del tope. */
 .board-stack-summary-title > em { flex: none; padding: 1px 5px; border: 1px solid #3a463d; border-radius: 8px; background: #202823; color: #cfd8d0; font: 700 9px 'DM Mono', monospace; font-style: normal; }
+/* Pila con nombre propio: el nombre manda y el título del tope queda como subtítulo. */
+.board-stack-summary-title.named { flex-wrap: wrap; row-gap: 1px; }
+.board-stack-summary-subtitle { flex: 1 1 100%; order: 3; min-width: 0; overflow: hidden; color: #87938b; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 /* Sin tooltip en la card cerrada: el preview del hover ya lista todos los títulos y un tooltip encima lo taparia.
    El tooltip animado vive en los miembros de la pila expandida (.board-stack-member-tip). */
 .board-stack-summary-foot { display: flex; flex: none; align-items: center; gap: 6px; margin-top: auto; padding-top: 6px; }
@@ -93,7 +96,7 @@
 /* Contenedor más oscuro y filas más claras: la jerarquía se lee de un vistazo.
    El padding es el marco de desapilado (debe coincidir con STACK_UNSTACK_FRAME):
    al dibujarse dentro, siempre hay superficie aunque la celda esté llena. */
-.board-stack-expanded { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; width: 100%; margin: 0; --stack-unstack-frame: 12px; padding: var(--stack-unstack-frame); border: 1px solid var(--stack-row-border); box-shadow: inset 2px 0 0 var(--status-color, #8fbf4a); border-radius: 6px; background: var(--stack-surface); min-width: 0; }
+.board-stack-expanded { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; width: 100%; margin: 0; --stack-unstack-frame: 16px; padding: var(--stack-unstack-frame); border: 1px solid var(--stack-row-border); box-shadow: inset 2px 0 0 var(--status-color, #8fbf4a); border-radius: 7px; background: var(--stack-surface); min-width: 0; }
 /* Soltar sobre el encabezado, un hueco o el fondo de la pila abierta también apila. */
 .board-stack-expanded.stack-drop-target { border-color: #d0a64b; box-shadow: inset 2px 0 0 #d0a64b, 0 0 0 1px #d0a64b88; }
 /* Anillo de desapilado: solo se enciende mientras se arrastra un miembro de esta pila.
@@ -105,19 +108,34 @@
 .board-stack-expanded.stack-unstack-armed .board-stack-unstack-label { opacity: .5; }
 .board-stack-expanded.stack-unstack-target .board-stack-unstack-label { color: #ffd7c4; opacity: 1; }
 .board-card-slot.board-stack-slot.expanded { min-width: 0; height: auto; }
-.board-stack-expanded-header { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px 6px; border-bottom: 1px solid #252e28; color: color-mix(in srgb, var(--status-color, #d7c07c) 72%, #e8eee9); }
-.board-stack-expanded-header strong { flex: none; margin-right: auto; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.board-stack-expanded-header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "count options collapse"; align-items: center; gap: 7px; min-width: 0; padding: 2px 2px 8px; border-bottom: 1px solid #252e28; color: color-mix(in srgb, var(--status-color, #d7c07c) 72%, #e8eee9); }
+.board-stack-count { grid-area: count; display: inline-flex; align-items: center; gap: 6px; color: inherit; }
+.board-stack-expanded-header strong { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 /* Acciones sobre toda la pila: selección total y menú contextual reutilizado (archivar, programar, formato…). */
-.board-stack-select-all { display: grid; flex: none; width: 22px; height: 22px; place-items: center; cursor: pointer; }
+.board-stack-select-all { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: #aab4ac; font-size: 9px; cursor: pointer; }
 .board-stack-select-all input { width: 13px; height: 13px; margin: 0; appearance: none; border: 1px solid #68736b; border-radius: 3px; background: #171d19; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
 .board-stack-select-all input:checked, .board-stack-select-all input:indeterminate { border-color: #d0a64b; background: #d0a64b; }
 .board-stack-select-all input:checked::after { display: block; width: 4px; height: 7px; margin: 1px 0 0 4px; border: solid #171d19; border-width: 0 2px 2px 0; content: ''; transform: rotate(45deg); }
 .board-stack-select-all input:indeterminate::after { display: block; width: 7px; height: 2px; margin: 5px auto; background: #171d19; content: ''; }
 .board-stack-select-all input:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
-.board-stack-actions { display: grid; flex: none; width: 24px; height: 24px; place-items: center; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8d988f; cursor: pointer; }
+.board-stack-actions { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8d988f; cursor: pointer; }
 .board-stack-actions:hover { border-color: #3a463d; background: #222a24; color: #edf3ee; }
 .board-stack-actions:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
-.board-stack-collapse { display: grid; flex: none; width: 26px; height: 26px; place-items: center; border: 1px solid #3a463d; border-radius: 4px; background: #1c231e; color: #cfd6cf; cursor: pointer; }
+/* Nombre de la pila en la vista expandida: se edita en línea y ocupa el espacio libre del encabezado. */
+.board-stack-name { display: inline-flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 5px 8px; overflow: hidden; border: 1px dashed #3a463d; border-radius: 5px; background: #171d19; color: #cfd8d0; font-size: 10px; font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.board-stack-name.unnamed { color: #87938b; font-weight: 500; }
+.board-stack-name:hover, .board-stack-name:focus-visible { border-color: #d0a64b; color: #edf3ee; outline: none; }
+.board-stack-rename { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.board-stack-rename input { min-width: 0; height: 22px; padding: 0 7px; border: 1px solid #4a574e; border-radius: 4px; background: #171d19; color: #e6ece7; font-size: 10px; }
+.board-stack-rename button { flex: none; height: 22px; padding: 0 8px; border: 1px solid #4a574e; border-radius: 4px; background: #202823; color: #d1dad3; font-size: 9px; cursor: pointer; }
+.board-stack-rename button:hover { border-color: #d0a64b; color: #edf3ee; }
+.board-stack-options-toggle { grid-area: options; display: inline-flex; align-items: center; gap: 3px; padding: 4px 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8d988f; font-size: 9px; cursor: pointer; }
+.board-stack-options-toggle:hover, .board-stack-options-toggle:focus-visible { border-color: #3a463d; background: #202823; color: #edf3ee; }
+.board-stack-options-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.board-stack-options-toggle svg { transition: transform .15s ease; }
+.board-stack-options { display: grid; gap: 7px; padding: 8px; border: 1px solid #29332c; border-radius: 5px; background: #141a16; }
+.board-stack-option-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
+.board-stack-collapse { grid-area: collapse; display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid #3a463d; border-radius: 4px; background: #1c231e; color: #cfd6cf; cursor: pointer; }
 .board-stack-collapse:hover { background: #222a24; color: #edf3ee; border-color: #525f55; }
 .board-stack-collapse:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
 /* Miembro de pila expandida: alto estable, el título nunca estira la fila */

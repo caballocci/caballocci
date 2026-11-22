@@ -31,6 +31,8 @@ export interface Post {
   /** null cuando no está en una pila; apunta a la pila de la publicación en el tablero. */
   stackId: string | null
   stackPosition: number | null
+  /** Nombre opcional de la pila; null deja que la tarjeta superior la identifique. */
+  stackName: string | null
   createdAt: string
   updatedAt: string
 }
@@ -178,7 +180,7 @@ export interface IdeaAnalysisProgress { stage: 'loading-model' | 'embeddings' | 
 
 export type IdeaInput = Omit<Idea, 'id' | 'createdAt' | 'updatedAt' | 'postId' | 'combinedPostId' | 'combinedPostIds'> & { id?: string; postId?: string | null; combinedPostId?: string | null; combinedPostIds?: string[] }
 
-export type PostInput = Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'media' | 'ideaBlocks' | 'sourceIdeaId' | 'stackId' | 'stackPosition'> & { id?: string; media?: MediaAsset[]; ideaBlocks?: IdeaBlock[]; sourceIdeaId?: string | null; stackId?: string | null; stackPosition?: number | null }
+export type PostInput = Omit<Post, 'id' | 'createdAt' | 'updatedAt' | 'media' | 'ideaBlocks' | 'sourceIdeaId' | 'stackId' | 'stackPosition' | 'stackName'> & { id?: string; media?: MediaAsset[]; ideaBlocks?: IdeaBlock[]; sourceIdeaId?: string | null; stackId?: string | null; stackPosition?: number | null; stackName?: string | null }
 
 export interface ConceptMapNode {
   id: string
@@ -485,6 +487,7 @@ export interface ElectronAPI {
   }
   lifecycle: {
     onCloseWarning(listener: () => void): () => void
+    onQuickNoteCreated(listener: () => void): () => void
   }
 }
 

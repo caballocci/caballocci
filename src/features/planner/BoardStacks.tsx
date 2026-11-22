@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ArrowUpFromLine, CalendarDays, ChevronUp, FileText, Film, Images, Layers, MoreHorizontal } from 'lucide-react'
+import { ArrowUpFromLine, CalendarDays, ChevronDown, ChevronUp, FileText, Film, Images, Layers, MoreHorizontal, Pencil } from 'lucide-react'
 import { PlatformMark } from '../../components/layout/AppShell'
-import { postColors } from '../../shared/postColors'
+import { isDefaultPostColor } from '../../shared/postColors'
 import type { PostInterestLevel } from '../../shared/post-marks'
 import type { ContentType, Post } from '../../shared/types'
 import { MobileCardStatus, MobileStackStatus, PostMarkBadges, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
@@ -31,6 +32,7 @@ export type StackHandlers = {
   containerDragLeave(event: React.DragEvent<HTMLElement>, stackId: string): void
   containerDrop(event: React.DragEvent<HTMLElement>, items: Post[], status: Post['status']): void
   unstack(member: Post): void
+  renameStack(stackId: string, name: string): void
 }
 
 /** El tooltip animado de un miembro solo tiene sentido si el título está recortado por el line-clamp:
@@ -63,7 +65,7 @@ export function StackClosedCard({ items, stackId, columnStatus, selected, draggi
   const top = items[0]
   const memberSelected = memberIds.every(id => selected.has(id))
   const memberSomeSelected = memberIds.some(id => selected.has(id))
-  const isCustomColor = top.color !== postColors[0].value
+  const isCustomColor = !isDefaultPostColor(top.color)
   const cardClass = `board-card board-stack-card board-stack-summary${isCustomColor ? ' has-custom-color' : ''}${memberSelected ? ' selected' : ''}${memberIds.some(id => dragging.has(id)) || dragging.has(top.id) ? ' is-dragging' : ''}`
   const scheduled = items.filter(member => member.scheduledAt).map(member => ({ post: member, time: parseISO(member.scheduledAt as string).getTime() })).sort((a, b) => a.time - b.time)
   const nextScheduled = scheduled[0] ?? null
@@ -74,7 +76,7 @@ export function StackClosedCard({ items, stackId, columnStatus, selected, draggi
   for (const member of items) for (const platform of member.platforms) if (!platformUnion.includes(platform)) platformUnion.push(platform)
   // Colores de portada: una franja con el color de cada miembro apilado, única vez cada uno.
   const memberColors: string[] = []
-  for (const member of items) if (member.color !== postColors[0].value && !memberColors.includes(member.color)) memberColors.push(member.color)
+  for (const member of items) if (!isDefaultPostColor(member.color) && !memberColors.includes(member.color)) memberColors.push(member.color)
   return <article
     data-area-select-id={top.id}
     tabIndex={0}
@@ -91,7 +93,9 @@ export function StackClosedCard({ items, stackId, columnStatus, selected, draggi
     onClick={() => handlers.toggleExpand(stackId)}
     onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handlers.toggleExpand(stackId) } }}
     aria-expanded={false}
-    aria-label={`Pila de ${stackCount} publicaciones: ${items.map(member => member.title || 'Publicación sin título').join('; ')}`}
+    aria-label={top.stackName
+      ? `Pila «${top.stackName}» de ${stackCount} publicaciones: ${items.map(member => member.title || 'Publicación sin título').join('; ')}`
+      : `Pila de ${stackCount} publicaciones: ${items.map(member => member.title || 'Publicación sin título').join('; ')}`}
   >
     <label className="board-select-hit" onClick={event => event.stopPropagation()}>
       <input type="checkbox" checked={memberSelected} ref={input => { if (input) input.indeterminate = memberSomeSelected && !memberSelected }} onChange={() => handlers.selectStack(memberIds)} aria-label={`Seleccionar pila de ${stackCount}`} />
@@ -103,8 +107,9 @@ export function StackClosedCard({ items, stackId, columnStatus, selected, draggi
     </div>
     {/* El título del miembro superior hace identificable la pila sin abrirla.
         Los títulos completos los revela el preview del hover; el tooltip animado vive en los miembros de la pila expandida. */}
-    <div className="board-stack-summary-title">
-      <span>{top.title || 'Publicación sin título'}</span>
+    <div className={`board-stack-summary-title${top.stackName ? ' named' : ''}`}>
+      <span>{top.stackName || top.title || 'Publicación sin título'}</span>
+      {top.stackName && <small className="board-stack-summary-subtitle">{top.title || 'Publicación sin título'}</small>}
       {stackCount > 1 && <em>+{stackCount - 1}</em>}
     </div>
     <div className="board-stack-summary-foot">
@@ -116,7 +121,7 @@ export function StackClosedCard({ items, stackId, columnStatus, selected, draggi
       {memberColors.map(color => <span key={color} className="board-stack-color-chip" style={{ backgroundColor: color }} />)}
     </div>}
     <div className="board-stack-preview" aria-hidden="true">
-      {items.map(member => { const Icon = stackContentIcon(member.contentType); const customColor = member.color !== postColors[0].value; return <div key={member.id} className={`board-stack-preview-item${customColor ? ' has-custom-color' : ''}`} style={{ '--post-color': member.color } as React.CSSProperties}><Icon size={11} aria-hidden="true" /><span>{member.title || 'Publicación sin título'}</span></div> })}
+      {items.map(member => { const Icon = stackContentIcon(member.contentType); const customColor = !isDefaultPostColor(member.color); return <div key={member.id} className={`board-stack-preview-item${customColor ? ' has-custom-color' : ''}`} style={{ '--post-color': member.color } as React.CSSProperties}><Icon size={11} aria-hidden="true" /><span>{member.title || 'Publicación sin título'}</span></div> })}
     </div>
   </article>
 }
@@ -136,6 +141,11 @@ export function StackExpandedList({ items, stackId, columnStatus, selected, drag
   const someSelected = orderIds.some(id => selected.has(id))
   const hoveringUnstack = hoverZone?.kind === 'unstack'
   const hoveringStack = hoverZone?.kind === 'stack'
+  const stackName = items[0]?.stackName ?? null
+  const [renaming, setRenaming] = useState(false)
+  const [draftName, setDraftName] = useState('')
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const submitName = () => { handlers.renameStack(stackId, draftName); setRenaming(false) }
   return <div
     className={`board-stack-expanded${hoveringStack ? ' stack-drop-target' : ''}${unstackable ? ' stack-unstack-armed' : ''}${hoveringUnstack ? ' stack-unstack-target' : ''}`}
     role="list"
@@ -146,18 +156,30 @@ export function StackExpandedList({ items, stackId, columnStatus, selected, drag
     onDrop={event => handlers.containerDrop(event, items, columnStatus)}
   >
     <div className="board-stack-expanded-header">
-      <Layers size={13} aria-hidden="true" /><strong>{items.length}</strong>
-      <label className="board-stack-select-all" title="Seleccionar toda la pila" onClick={event => event.stopPropagation()}>
-        <input type="checkbox" checked={allSelected} ref={input => { if (input) input.indeterminate = someSelected && !allSelected }} onChange={() => handlers.selectStack(orderIds)} aria-label={`Seleccionar pila de ${items.length}`} />
-      </label>
-      <button type="button" className="board-stack-actions" aria-label="Acciones de la pila" title="Acciones de la pila" onClick={event => handlers.openContextMenu(event, items[0], orderIds)}><MoreHorizontal size={14} /></button>
+      <span className="board-stack-count"><Layers size={13} aria-hidden="true" /><strong>{items.length}</strong></span>
+      <button type="button" className="board-stack-options-toggle" aria-expanded={optionsOpen} onClick={() => setOptionsOpen(open => !open)}><ChevronDown size={12} aria-hidden="true" /> Opciones</button>
       <button type="button" className="board-stack-collapse" aria-label="Colapsar pila" title="Colapsar pila" onClick={() => handlers.toggleExpand(stackId)}><ChevronUp size={14} /></button>
     </div>
+    {optionsOpen && <div className="board-stack-options">
+      {renaming
+        ? <form className="board-stack-rename" onSubmit={event => { event.preventDefault(); submitName() }}>
+          <input autoFocus value={draftName} maxLength={120} placeholder="Nombre de la pila" aria-label="Nombre de la pila" onChange={event => setDraftName(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setRenaming(false) } }} />
+          <button type="submit" title="Guardar nombre">Guardar</button>
+        </form>
+        : <button type="button" className={`board-stack-name${stackName ? '' : ' unnamed'}`} title={stackName ? `Pila «${stackName}». Clic para renombrar` : 'Nombrar esta pila'} onClick={() => { setDraftName(stackName ?? ''); setRenaming(true) }}><Pencil size={11} aria-hidden="true" />{stackName || 'Nombrar pila'}</button>}
+      <div className="board-stack-option-actions">
+        <label className="board-stack-select-all" title="Seleccionar toda la pila" onClick={event => event.stopPropagation()}>
+          <input type="checkbox" checked={allSelected} ref={input => { if (input) input.indeterminate = someSelected && !allSelected }} onChange={() => handlers.selectStack(orderIds)} aria-label={`Seleccionar pila de ${items.length}`} />
+          <span>Seleccionar todas</span>
+        </label>
+        <button type="button" className="board-stack-actions" aria-label="Acciones de la pila" title="Acciones de la pila" onClick={event => handlers.openContextMenu(event, items[0], orderIds)}><MoreHorizontal size={14} /></button>
+      </div>
+    </div>}
     <div className="board-stack-unstack-label" aria-hidden="true">Sacar de la pila</div>
     {items.map(member => <div
       key={member.id}
       role="listitem"
-      className={`board-stack-member${member.color !== postColors[0].value ? ' has-custom-color' : ''}${selected.has(member.id) ? ' selected' : ''}${dragging.has(member.id) ? ' is-dragging' : ''}${hoverZone?.kind === 'insert' && hoverZone.targetId === member.id && hoverZone.before ? ' reorder-over-top' : ''}${hoverZone?.kind === 'insert' && hoverZone.targetId === member.id && !hoverZone.before ? ' reorder-over-bottom' : ''}`}
+      className={`board-stack-member${!isDefaultPostColor(member.color) ? ' has-custom-color' : ''}${selected.has(member.id) ? ' selected' : ''}${dragging.has(member.id) ? ' is-dragging' : ''}${hoverZone?.kind === 'insert' && hoverZone.targetId === member.id && hoverZone.before ? ' reorder-over-top' : ''}${hoverZone?.kind === 'insert' && hoverZone.targetId === member.id && !hoverZone.before ? ' reorder-over-bottom' : ''}`}
       data-area-select-id={member.id}
       tabIndex={0}
       draggable
