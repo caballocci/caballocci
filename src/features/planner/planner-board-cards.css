@@ -9,6 +9,10 @@
 .board-card-color-options button[aria-pressed="true"] { outline: 2px solid #e0e8e2; outline-offset: 1px; }
 .board-card-color-options button:hover { transform: scale(1.12); }
 .board-card-color-options .board-card-color-reset { grid-column: 1 / -1; width: auto; height: 23px; border: 1px solid #39443c; background: #202722; color: #d1dad3; font-size: 9px; }
+/* «Sin color»: la muestra neutra se dibuja con una diagonal, no con el coral heredado. */
+.board-card-color-trigger.is-default, .board-context-color-icon.is-default { background-image: linear-gradient(135deg, transparent 44%, #879189 44%, #879189 56%, transparent 56%); }
+.board-card-color-options .board-card-color-reset, .board-context-color-options > .board-context-color-reset { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.board-card-color-options .board-card-color-reset i, .board-context-color-options > .board-context-color-reset i { width: 10px; height: 10px; border: 1px solid #879189; border-radius: 3px; background-image: linear-gradient(135deg, transparent 44%, #879189 44%, #879189 56%, transparent 56%); }
 .board-stack h3 { color: #e8eee9; font-size: 11px; font-weight: 600; line-height: 1.45; }
 .board-stack p { color: #a2ada5; font-size: 10px; line-height: 1.5; }
 .library-workspace .segmented { min-height: 36px; }
