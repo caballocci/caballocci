@@ -28,7 +28,7 @@ Instrucciones para agentes de código, asistentes y automatizaciones que trabaje
 ## Convenciones
 
 - **Commits:** Conventional Commits en inglés, sujeto en imperativo y minúsculas: `feat(planner): ...`, `fix(updater): ...`, `docs: ...`, `chore: ...`. Los merges de release usan `merge: release vX.Y.Z`.
-- **Pruebas:** cada archivo nuevo en `test/` debe añadirse a la lista explícita del script `test` en `package.json`.
+- **Pruebas:** el script `test` descubre automáticamente `test/**/*.test.mts`. Los helpers compartidos van en `test/helpers/` y no se ejecutan como pruebas.
 - **Migraciones:** se añaden al final del array en `electron/database/migrations.ts` con versión creciente. No editar migraciones ya publicadas. El backup previo se crea en `electron/database.ts` (`runMigrations`).
 - **IPC:** los canales nuevos necesitan validación en `electron/ipc-validation.ts`; el renderer corre con sandbox y `contextIsolation`. No exponer APIs de Node.
 - **Markdown:** las notas se renderizan con `react-markdown` + `remark-gfm` y HTML crudo deshabilitado. No introducir HTML en notas ni en la UI de actualizaciones.

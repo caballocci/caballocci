@@ -49,9 +49,9 @@ En desarrollo, **Acerca de / Actualizaciones** indica que el updater no está di
 
 ## Pruebas
 
-Añade pruebas para la lógica nueva. Los archivos viven en `test/` y usan el test runner de Node con extensión `.mts`.
+Añade pruebas para la lógica nueva. Los archivos viven en `test/` y usan el test runner de Node con extensión `.test.mts`.
 
-**La lista de pruebas es explícita**: al crear un archivo nuevo, añádelo al script `test` en `package.json`; si no, CI no lo ejecutará.
+El script `test` descubre automáticamente todos los archivos `test/**/*.test.mts`; no hace falta registrarlos en `package.json`. Los helpers compartidos van en `test/helpers/` y no se ejecutan como pruebas.
 
 Antes de abrir el PR:
 
@@ -83,7 +83,7 @@ No publiques detalles explícitamente explotables en un issue. Sigue el procedim
 ## Checklist del PR
 
 - [ ] Commits con mensajes convencionales y en inglés.
-- [ ] Pruebas nuevas registradas en `package.json` y `npm.cmd test` en verde.
+- [ ] Pruebas nuevas en `test/**/*.test.mts` y `npm.cmd test` en verde.
 - [ ] `npm.cmd run typecheck` y `npm.cmd run build` en verde.
 - [ ] Documentación actualizada si el comportamiento cambió.
 - [ ] Sin secretos, rutas locales absolutas ni artefactos de `release/` en el diff.

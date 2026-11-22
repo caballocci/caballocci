@@ -1,13 +1,9 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import initSqlJs from 'sql.js'
-import path from 'node:path'
+import { freshDb } from '../helpers/database.mts'
 
 const require = createRequire(import.meta.url)
-const { runMigrations } = require('../../dist-electron/database/migration-runner.js') as {
-  runMigrations(db: import('sql.js').Database, existedAtStartup: boolean, backup: () => void): void
-}
 const { PostsRepository } = require('../../dist-electron/database/posts-repository.js') as {
   PostsRepository: new (db: import('sql.js').Database, persist: () => void, event: () => void) => {
     save(input: Record<string, unknown>, ideaLookup: () => undefined): Record<string, unknown>
@@ -17,11 +13,8 @@ const { PostsRepository } = require('../../dist-electron/database/posts-reposito
   }
 }
 
-test('post stacks round-trip through migrations v34/v36 and PostsRepository', async t => {
-  const SQL = await initSqlJs({ locateFile: file => path.resolve('node_modules/sql.js/dist', file) })
-  const db = new SQL.Database()
-  t.after(() => db.close())
-  runMigrations(db, false, () => assert.fail('A new database must not require a backup'))
+test('las pilas de posts sobreviven la ida y vuelta por las migraciones v34/v36 y PostsRepository', async t => {
+  const db = await freshDb(t)
 
   const columns = db.exec('PRAGMA table_info(posts)')[0].values.map(row => String(row[1]))
   assert.ok(columns.includes('stack_id'), 'posts.stack_id exists after migrations')

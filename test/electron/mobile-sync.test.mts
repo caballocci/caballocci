@@ -4,21 +4,15 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import initSqlJs from 'sql.js'
 import type { Database } from 'sql.js'
+import { dbAtVersion, freshDb, runMigrations } from '../helpers/database.mts'
 
 const require = createRequire(import.meta.url)
-const { runMigrations } = require('../../dist-electron/database/migration-runner.js') as {
-  runMigrations(db: Database, existedAtStartup: boolean, backup: () => void): void
-}
 const { MobileSyncRepository } = require('../../dist-electron/database/mobile-sync-repository.js') as {
   MobileSyncRepository: new (db: Database, persist: () => void) => {
     listUsage(): Array<Record<string, unknown>>
     recordUsage(event: { eventId: string; postId: string; targetId: string; action: 'used' | 'removed'; usedAt: string; deviceId: string; version: number }): boolean
   }
-}
-const { migrations } = require('../../dist-electron/database/migrations.js') as {
-  migrations: Array<{ version: number; up: string }>
 }
 const { cleanUnreferencedMobileAlbums, importMobileUsageFiles, mergeMobilePublications, nextMobileBatch, nextMobileSpaceOrder, parseMobileUsageEvent, pruneMobilePublications, recordMobileBatch, summarizeMobilePublicationProgress, summarizeMobileUsage, writeMobileCatalog } = require('../../dist-electron/mobile-sync.js') as {
   summarizeMobileUsage(events: Array<{ postId: string; targetId: string; action: string; usedAt: string }>): { used: Set<string>; removed: Set<string> }
@@ -64,7 +58,7 @@ function event(eventId: string, postId = 'post-a', targetId = 'instagram') {
   }
 }
 
-test('replaces exported catalog entries but preserves selected posts omitted from this batch', () => {
+test('reemplaza las entradas exportadas del catálogo pero conserva los posts seleccionados omitidos en este lote', () => {
   const existing = [
     { postId: 'exported', targetId: 'old-target' },
     { postId: 'omitted', targetId: 'existing-target' },
@@ -81,7 +75,7 @@ test('replaces exported catalog entries but preserves selected posts omitted fro
   ])
 })
 
-test('assigns sequential alphabetic batch labels and records exported IDs', t => {
+test('asigna etiquetas de lote alfabéticas secuenciales y registra los ids exportados', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-mobile-batches-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
 
@@ -101,7 +95,7 @@ test('assigns sequential alphabetic batch labels and records exported IDs', t =>
   assert.equal(typeof history[0]?.exportedAt, 'string')
 })
 
-test('keeps a continuous album order per space, independent of batch sequence', t => {
+test('mantiene un orden de álbum continuo por espacio, independiente de la secuencia de lotes', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-mobile-space-order-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
 
@@ -115,7 +109,7 @@ test('keeps a continuous album order per space, independent of batch sequence', 
   assert.deepEqual(sequences, { marketing: 2, diseño: 1 })
 })
 
-test('exports one versioned catalog with independent destination entries', t => {
+test('exporta un catálogo versionado con entradas independientes por destino', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-mobile-catalog-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const result = writeMobileCatalog(root, [
@@ -133,7 +127,7 @@ test('exports one versioned catalog with independent destination entries', t => 
   assert.equal(saved.publications[0]?.manifestPath, saved.publications[1]?.manifestPath)
 })
 
-test('validates per-destination event identifiers and UTC timestamps', () => {
+test('valida los identificadores de evento por destino y las marcas de tiempo UTC', () => {
   assert.deepEqual(parseMobileUsageEvent(event('event-a')), {
     schema: 'caballocci.mobile-sync.usage',
     version: 1,
@@ -148,7 +142,7 @@ test('validates per-destination event identifiers and UTC timestamps', () => {
   assert.throws(() => parseMobileUsageEvent({ ...event('event-a'), targetId: '../unsafe' }), /identificadores/)
 })
 
-test('imports valid events idempotently and reports incomplete, invalid, and unknown events', t => {
+test('importa eventos válidos de forma idempotente y reporta eventos incompletos, inválidos y desconocidos', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-mobile-import-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const inbox = path.join(root, 'android-inbox', 'device-a')
@@ -180,11 +174,8 @@ test('imports valid events idempotently and reports incomplete, invalid, and unk
   assert.equal(second.unknown.length, 1)
 })
 
-test('persists confirmations per destination without changing editorial status', async t => {
-  const SQL = await initSqlJs({ locateFile: file => path.resolve('node_modules/sql.js/dist', file) })
-  const db = new SQL.Database()
-  t.after(() => db.close())
-  runMigrations(db, false, () => assert.fail('A new database must not require a backup'))
+test('persiste las confirmaciones por destino sin cambiar el estado editorial', async t => {
+  const db = await freshDb(t)
   db.run("INSERT INTO posts (id,title,status,platforms,distribution_json,created_at,updated_at) VALUES ('post-a','A','scheduled','[\"instagram\",\"facebook\"]','[{\"id\":\"instagram\",\"status\":\"scheduled\"},{\"id\":\"facebook\",\"status\":\"pending\"}]','now','now')")
   let persists = 0
   const repository = new MobileSyncRepository(db, () => { persists += 1 })
@@ -200,7 +191,7 @@ test('persists confirmations per destination without changing editorial status',
   ])
 })
 
-test('accepts removal events and records them even when the publication no longer exists', t => {
+test('acepta eventos de retirada y los registra aunque la publicación ya no exista', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-mobile-removed-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const inbox = path.join(root, 'android-inbox', 'device-a')
@@ -216,7 +207,7 @@ test('accepts removal events and records them even when the publication no longe
   assert.equal(report.unknown.length, 1, 'a use of a missing publication is still reported')
 })
 
-test('summarizes usage so that only the latest removal hides a destination', () => {
+test('resume el uso para que solo la retirada más reciente oculte un destino', () => {
   const summary = summarizeMobileUsage([
     { postId: 'a', targetId: 'ig', action: 'used', usedAt: '2026-10-24T05:00:00.000Z' },
     { postId: 'a', targetId: 'ig', action: 'removed', usedAt: '2026-10-24T06:00:00.000Z' },
@@ -227,7 +218,7 @@ test('summarizes usage so that only the latest removal hides a destination', () 
   assert.deepEqual([...summary.removed], ['a\u0000ig'])
 })
 
-test('summarizes mobile export confirmation progress by destination', () => {
+test('resume el avance de confirmación de la exportación móvil por destino', () => {
   const progress = summarizeMobilePublicationProgress([
     { postId: 'mixed', targetId: 'instagram', used: false },
     { postId: 'mixed', targetId: 'facebook', used: false },
@@ -245,7 +236,7 @@ test('summarizes mobile export confirmation progress by destination', () => {
   ])
 })
 
-test('prunes deleted posts and removed destinations from the catalog and deletes orphan albums', t => {
+test('poda del catálogo los posts borrados y los destinos retirados, y borra los álbumes huérfanos', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-mobile-prune-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const albums = path.join(root, 'pc-outbox', 'publications')
@@ -270,12 +261,8 @@ test('prunes deleted posts and removed destinations from the catalog and deletes
   assert.deepEqual(fs.readdirSync(albums).sort(), ['.caballocci-export-staging', 'a-xyz-1-keep', 'sin-manifest'])
 })
 
-test('migration 28 keeps existing usage rows and accepts removal events only', async t => {
-  const SQL = await initSqlJs({ locateFile: file => path.resolve('node_modules/sql.js/dist', file) })
-  const db = new SQL.Database()
-  t.after(() => db.close())
-  for (const migration of migrations.filter(item => item.version <= 27)) db.run(migration.up)
-  db.run('PRAGMA user_version = 27')
+test('la migración 28 conserva las filas de uso existentes y solo acepta eventos de retirada', async t => {
+  const db = await dbAtVersion(t, 27)
   db.run("INSERT INTO mobile_usage_events VALUES ('old','post-a','instagram','used','2026-10-24T05:30:00.000Z','device-a',1,'now')")
 
   runMigrations(db, true, () => undefined)
