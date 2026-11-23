@@ -58,10 +58,9 @@ Si el cambio prepara una release, añadir `node scripts/verify-release.mjs vX.Y.
 - Si `npm ci` falla, hacer como máximo un intento de diagnóstico con caché separada y salida visible: `npm --cache "$HOME/.npm-caballocci-tmp" ci --foreground-scripts --loglevel=verbose`.
 - No repetir indefinidamente el mismo `npm ci`, no purgar Node/npm ni limpiar cachés globales por primera reacción y no ejecutar `npm audit fix --force`.
 - Ante `ELOOP`/`ENOENT` revisar enlaces y cachés de PRoot antes de reinstalar paquetes. Ante `ENOTEMPTY` apartar el directorio con timestamp y conservarlo hasta verificar la reparación.
-- El Node de Ubuntu puede carecer de soporte TypeScript integrado. Si aparece `ERR_NO_TYPESCRIPT`, no asumir que las pruebas están rotas: comprobar `node --experimental-strip-types -e "console.log('typescript-ok')"` y usar un Node 22 oficial compatible.
+- El Node de Ubuntu puede carecer de soporte TypeScript integrado. Si aparece `ERR_NO_TYPESCRIPT`, no asumir que las pruebas están rotas: comprobar `node --experimental-strip-types -e "console.log('typescript-ok')"` y usar Node.js 22.6 o posterior oficial compatible.
 - Si falla una herramienta global como OpenCode, revisar primero `npm list -g --depth=0`, el enlace en `npm config get prefix/bin` y el postinstall. Apartar una instalación defectuosa antes de reinstalar una sola vez.
 - Conservar una copia del log con los datos personales, rutas locales y secretos retirados. No documentar rutas locales absolutas del entorno.
-
 
 ## No hacer
 

@@ -133,7 +133,7 @@ Decisiones de diseño relevantes:
 
 ## Desarrollo
 
-**Requisitos:** Windows, Git y Node.js 22 o posterior.
+**Requisitos:** Windows, Git y Node.js 22.6 o posterior.
 
 ```powershell
 git clone https://github.com/gattocci/caballocci.git

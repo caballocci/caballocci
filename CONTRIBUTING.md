@@ -4,7 +4,7 @@ Gracias por mejorar caballocci. Este documento explica cómo preparar un cambio 
 
 ## Requisitos
 
-- **Node.js 22** y npm (es la versión que usa CI; las pruebas usan `--experimental-strip-types`).
+- **Node.js 22.6 o posterior** y npm (es la versión mínima compatible con el test runner que usa `--experimental-strip-types`).
 - **Windows** si vas a generar el instalador NSIS (`npm.cmd run dist:win`).
 - Para la app Android complementaria: **Java 21** y Android SDK. Las claves de firma (`ANDROID_KEYSTORE_*`) solo existen en GitHub Actions; no las pongas en el repo ni en tu máquina como archivo versionado.
 
@@ -21,7 +21,7 @@ En desarrollo, **Acerca de / Actualizaciones** indica que el updater no está di
 
 ### Linux y otros entornos
 
-El flujo principal está pensado para Windows, pero se puede contribuir desde Linux si tienes Node.js 22 oficial y npm funcionando. Antes de instalar, comprueba `node -v`, `npm -v` y `uname -m`.
+El flujo principal está pensado para Windows, pero se puede contribuir desde Linux si tienes Node.js 22.6 o posterior oficial y npm funcionando. Antes de instalar, comprueba `node -v`, `npm -v` y `uname -m`.
 
 Si `npm ci` falla, no repitas el comando ni reinstales Node/npm a ciegas: guarda el log completo, identifica qué archivo o directorio causa el error y apártalo en lugar de borrarlo. Un fallo de las pruebas con `ERR_NO_TYPESCRIPT` suele indicar un Node sin soporte para `--experimental-strip-types`, no un problema del proyecto.
 
