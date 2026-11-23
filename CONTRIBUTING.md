@@ -19,6 +19,14 @@ npm.cmd run dev
 
 En desarrollo, **Acerca de / Actualizaciones** indica que el updater no está disponible: `electron-updater` solo se activa en la app empaquetada.
 
+### Linux y otros entornos
+
+El flujo principal está pensado para Windows, pero se puede contribuir desde Linux si tienes Node.js 22 oficial y npm funcionando. Antes de instalar, comprueba `node -v`, `npm -v` y `uname -m`.
+
+Si `npm ci` falla, no repitas el comando ni reinstales Node/npm a ciegas: guarda el log completo, identifica qué archivo o directorio causa el error y apártalo en lugar de borrarlo. Un fallo de las pruebas con `ERR_NO_TYPESCRIPT` suele indicar un Node sin soporte para `--experimental-strip-types`, no un problema del proyecto.
+
+En entornos poco habituales son frecuentes los errores de enlaces simbólicos (`ELOOP`, `ENOENT`, `ENOTEMPTY`) y los builds de Node no oficiales. La guía de diagnóstico detallada está en la sección "Entorno Linux / Termux / PRoot" de [AGENTS.md](AGENTS.md); aunque esté escrita para agentes automáticos, sirve igual para una persona.
+
 ## Flujo de trabajo
 
 1. Trabaja desde una rama con un cambio enfocado; no mezclar features independientes en la misma rama.
