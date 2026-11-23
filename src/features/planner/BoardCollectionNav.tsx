@@ -16,7 +16,7 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
   selectedWorkGroup: WorkGroup | null
   setActiveWorkGroup(id: string | null): void
   openGroupForm(group?: WorkGroup | null, parent?: WorkGroup | null): void
-  onDropPosts(groupId: string, ids: string[]): void
+  onDropPosts(groupId: string, ids: string[], moveFromCurrent?: boolean): void
   onDropPostsUnassigned(ids: string[]): void
   onEditGroup(group: WorkGroup): void
   onColor(group: WorkGroup, color: string): void
@@ -102,7 +102,7 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
 
   // Destinos de publicaciones: una colección concreta o `null` = sin colección.
   // El mismo par de handlers sirve para chips, breadcrumb y la zona "Sin colección".
-  const postDropProps = (group: WorkGroup | null, options: { expand?: boolean } = {}) => ({
+  const postDropProps = (group: WorkGroup | null, options: { expand?: boolean; moveFromCurrent?: boolean } = {}) => ({
     onDragOver: (event: ReactDragEvent<HTMLElement>) => {
       if (!isPostDragEvent(event)) return
       event.preventDefault()
@@ -122,7 +122,7 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
       setBranchTrailIds([])
       const ids = readDraggedPostIds(event)
       if (!ids.length) return
-      if (group) onDropPosts(group.id, ids)
+      if (group) onDropPosts(group.id, ids, options.moveFromCurrent)
       else onDropPostsUnassigned(ids)
     },
   })
@@ -192,7 +192,7 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
   return <nav className={`board-collection-nav${draggingPosts ? ' post-drag-active' : ''}${branchRows.length ? ' branch-open' : ''}`} aria-label="Colecciones">
     {selectedWorkGroup && <div className="board-collection-breadcrumb" role="navigation" aria-label="Nivel de colección">
       <button type="button" {...postDropProps(null)} onClick={() => goTo(null)}>Colecciones</button>
-      {path.map((crumb, index) => <span key={crumb.id}><em aria-hidden="true">›</em><button type="button" className={index === path.length - 1 ? 'active' : ''} {...postDropProps(crumb, { expand: false })} onClick={() => goTo(crumb.id)}>{crumb.name}</button></span>)}
+      {path.map((crumb, index) => <span key={crumb.id}><em aria-hidden="true">›</em><button type="button" className={index === path.length - 1 ? 'active' : ''} {...postDropProps(crumb, { expand: false, moveFromCurrent: index < path.length - 1 })} onClick={() => goTo(crumb.id)}>{crumb.name}</button></span>)}
     </div>}
     <div className="board-collection-tabs" onWheel={event => { if (event.deltaY && !event.shiftKey) event.currentTarget.scrollLeft += event.deltaY }}>
       {!selectedWorkGroup && <div className="board-collection-item board-collection-unassigned" {...postDropProps(null)}>
@@ -206,7 +206,7 @@ export function BoardCollectionNav({ groups, posts, selectedWorkGroup, setActive
       {levelGroups.map(group => renderGroupItem(group, 'level'))}
       {draggingCollection?.parentId != null && <button type="button" className="board-collection-root-drop" onDragOver={event => { event.preventDefault(); event.currentTarget.classList.add('drag-over') }} onDragLeave={event => event.currentTarget.classList.remove('drag-over')} onDrop={event => { event.preventDefault(); event.currentTarget.classList.remove('drag-over'); const draggedId = event.dataTransfer.getData(workGroupDragType); if (draggedId) nestWorkGroup(draggedId, null); setDraggingCollectionId(null) }}>Mover al nivel superior</button>}
       <button type="button" className="board-collection-add board-collection-chip" onClick={() => openGroupForm(undefined, selectedWorkGroup)} aria-label={selectedWorkGroup ? 'Nueva subcolección' : 'Nueva colección'} title={selectedWorkGroup ? 'Nueva subcolección' : 'Nueva colección'}><Plus size={17} /></button>
-      {draggingPosts && <span className="board-collection-drop-guidance" role="status">Soltá sobre una colección para añadir; en «Sin colección» o «Colecciones» para quitar</span>}
+      {draggingPosts && <span className="board-collection-drop-guidance" role="status">Soltá sobre una colección para añadir; en el nivel superior para mover; en «Sin colección» o «Colecciones» para quitar</span>}
     </div>
     {branchRows.length > 0 && <div className="board-collection-branch" role="group" aria-label="Subcolecciones">
       {branchRows.map((row, depth) => <div className="board-collection-branch-row" key={row.parent.id} style={{ '--branch-depth': depth } as React.CSSProperties}>

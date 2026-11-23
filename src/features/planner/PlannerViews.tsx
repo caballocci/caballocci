@@ -16,7 +16,7 @@ import { BoardWorkGroupDialogs } from './BoardWorkGroupDialogs'
 import { PastePostsDialog } from './PastePostsDialog'
 import { useBoardWorkGroups } from './useBoardWorkGroups'
 import { useWorkGroupOrder } from './useWorkGroupOrder'
-import { childrenByParent, subtreePostIds } from '../../shared/work-group-tree'
+import { childrenByParent, subtreeGroupIds, subtreePostIds } from '../../shared/work-group-tree'
 import { useBoardList } from './useBoardList'
 import { useBoardLanes } from './useBoardLanes'
 import { useBoardSelection } from './useBoardSelection'
@@ -224,7 +224,7 @@ export function Board({ onEditSelection, onPickPost, pickMode = false, pickedPos
     void runWithErrorReporting(() => usePlanner.getState().save({ ...post, scheduledAt: scheduledAt.toISOString(), status: 'scheduled' }), 'No se pudo programar la publicación')
   }
   const moveDragged = (status: Post['status']) => runWithErrorReporting(async () => { const ids = dragIds.current; dragIds.current = []; const changed = ids.filter(id => allPosts.some(post => post.id === id && post.status !== status)); if (changed.length) { await moveWithStacks(changed, status); clear() } }, 'No se pudieron mover las publicaciones')
-  const dropPostsInCollection = (groupId: string, ids: string[]) => {
+  const dropPostsInCollection = (groupId: string, ids: string[], moveFromCurrent = false) => {
     const group = scopedWorkGroups.find(item => item.id === groupId && !item.archivedAt)
     const postIds = ids.filter(id => {
       const post = allPosts.find(item => item.id === id)
@@ -232,7 +232,22 @@ export function Board({ onEditSelection, onPickPost, pickMode = false, pickedPos
     })
     if (!group || !postIds.length) return
     void runWithErrorReporting(async () => {
-      await usePlanner.getState().setWorkGroupPosts(groupId, [...new Set([...group.postIds, ...postIds])])
+      if (moveFromCurrent && selectedWorkGroup) {
+        const sourceIds = subtreeGroupIds(scopedWorkGroups, selectedWorkGroup.id)
+        const historyStart = usePlanner.getState().undoHistory.length
+        for (const source of scopedWorkGroups) {
+          if (!sourceIds.has(source.id) || source.id === groupId) continue
+          const nextPostIds = source.postIds.filter(id => !postIds.includes(id))
+          if (nextPostIds.length !== source.postIds.length) await usePlanner.getState().setWorkGroupPosts(source.id, nextPostIds)
+        }
+        const currentTarget = usePlanner.getState().workGroups.find(item => item.id === groupId)
+        if (currentTarget) await usePlanner.getState().setWorkGroupPosts(groupId, [...new Set([...currentTarget.postIds, ...postIds])])
+        const changes = usePlanner.getState().undoHistory.length - historyStart
+        if (changes > 1) usePlanner.getState().groupRecentUndoActions(changes, `Mover publicaciones a ${group.name}`)
+      } else {
+        const currentTarget = usePlanner.getState().workGroups.find(item => item.id === groupId)
+        if (currentTarget) await usePlanner.getState().setWorkGroupPosts(groupId, [...new Set([...currentTarget.postIds, ...postIds])])
+      }
       clear()
     }, 'No se pudieron añadir las publicaciones a la colección')
   }
