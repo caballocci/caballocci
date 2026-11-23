@@ -22,7 +22,7 @@ function createIdea(id: string, status: Idea['status'] = 'inbox'): Idea {
   }
 }
 
-test('maps each affinity to its idea and identifies the least aligned member', () => {
+test('asocia cada afinidad a su idea e identifica el miembro menos alineado', () => {
   const ideas = [createIdea('a'), createIdea('b'), createIdea('c')]
   const cluster: IdeaCluster = {
     id: 'group',
@@ -41,13 +41,13 @@ test('maps each affinity to its idea and identifies the least aligned member', (
   assert.deepEqual(review.members[0].comparisons.map(comparison => comparison.ideaId), ['c', 'a'])
 })
 
-test('does not flag a least-aligned idea when the score difference is below the review threshold', () => {
+test('no marca la idea menos alineada cuando la diferencia de puntuación está bajo el umbral de revisión', () => {
   const cluster: IdeaCluster = { id: 'group', name: 'Tema', ideaIds: ['a', 'b'], memberScores: [0.7, 0.74] }
 
   assert.equal(buildClusterReview(cluster, [createIdea('a'), createIdea('b')]).leastAligned, null)
 })
 
-test('corpus signature ignores status changes but changes when the content changes', () => {
+test('la firma del corpus ignora cambios de estado pero cambia con el contenido', () => {
   const original = [createIdea('a'), createIdea('b')]
   const statusChanged = [createIdea('a', 'developing'), createIdea('b', 'ready')]
 
@@ -57,7 +57,7 @@ test('corpus signature ignores status changes but changes when the content chang
   assert.equal(ideaCorpusSignature(original), ideaCorpusSignature([...original].reverse()))
 })
 
-test('moves only selected cluster members that are not already developing', async () => {
+test('mueve solo los miembros seleccionados del clúster que aún no están en desarrollo', async () => {
   const ideas = [createIdea('a'), createIdea('b', 'developing'), createIdea('c')]
   const cluster: IdeaCluster = { id: 'group', name: 'Tema', ideaIds: ['a', 'b', 'c', 'missing'] }
   const saved: Idea[] = []
@@ -73,7 +73,7 @@ test('moves only selected cluster members that are not already developing', asyn
   assert.equal(saved[0].status, 'developing')
 })
 
-test('surfaces failures while updating a selected cluster member', async () => {
+test('muestra los fallos al actualizar un miembro seleccionado del clúster', async () => {
   const cluster: IdeaCluster = { id: 'group', name: 'Tema', ideaIds: ['a'] }
 
   await assert.rejects(

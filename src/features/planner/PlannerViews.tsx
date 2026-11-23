@@ -9,13 +9,14 @@ import { BoardHeader } from './BoardHeader'
 import { BoardArchivedMedia } from './BoardArchivedMedia'
 import { BoardWorkGroupToolbar } from './BoardWorkGroupToolbar'
 import { BoardCollectionNav } from './BoardCollectionNav'
+import { planCollectionDetach } from './collection-branch'
 import { BoardBulkActions } from './BoardBulkActions'
 import { BoardCalendarView } from './BoardCalendarView'
 import { BoardWorkGroupDialogs } from './BoardWorkGroupDialogs'
 import { PastePostsDialog } from './PastePostsDialog'
 import { useBoardWorkGroups } from './useBoardWorkGroups'
 import { useWorkGroupOrder } from './useWorkGroupOrder'
-import { childrenByParent, subtreePostIds } from '../../shared/work-group-tree'
+import { childrenByParent, subtreeGroupIds, subtreePostIds } from '../../shared/work-group-tree'
 import { useBoardList } from './useBoardList'
 import { useBoardLanes } from './useBoardLanes'
 import { useBoardSelection } from './useBoardSelection'
@@ -223,7 +224,7 @@ export function Board({ onEditSelection, onPickPost, pickMode = false, pickedPos
     void runWithErrorReporting(() => usePlanner.getState().save({ ...post, scheduledAt: scheduledAt.toISOString(), status: 'scheduled' }), 'No se pudo programar la publicación')
   }
   const moveDragged = (status: Post['status']) => runWithErrorReporting(async () => { const ids = dragIds.current; dragIds.current = []; const changed = ids.filter(id => allPosts.some(post => post.id === id && post.status !== status)); if (changed.length) { await moveWithStacks(changed, status); clear() } }, 'No se pudieron mover las publicaciones')
-  const dropPostsInCollection = (groupId: string, ids: string[]) => {
+  const dropPostsInCollection = (groupId: string, ids: string[], moveFromCurrent = false) => {
     const group = scopedWorkGroups.find(item => item.id === groupId && !item.archivedAt)
     const postIds = ids.filter(id => {
       const post = allPosts.find(item => item.id === id)
@@ -231,9 +232,36 @@ export function Board({ onEditSelection, onPickPost, pickMode = false, pickedPos
     })
     if (!group || !postIds.length) return
     void runWithErrorReporting(async () => {
-      await usePlanner.getState().setWorkGroupPosts(groupId, [...new Set([...group.postIds, ...postIds])])
+      if (moveFromCurrent && selectedWorkGroup) {
+        const sourceIds = subtreeGroupIds(scopedWorkGroups, selectedWorkGroup.id)
+        const historyStart = usePlanner.getState().undoHistory.length
+        for (const source of scopedWorkGroups) {
+          if (!sourceIds.has(source.id) || source.id === groupId) continue
+          const nextPostIds = source.postIds.filter(id => !postIds.includes(id))
+          if (nextPostIds.length !== source.postIds.length) await usePlanner.getState().setWorkGroupPosts(source.id, nextPostIds)
+        }
+        const currentTarget = usePlanner.getState().workGroups.find(item => item.id === groupId)
+        if (currentTarget) await usePlanner.getState().setWorkGroupPosts(groupId, [...new Set([...currentTarget.postIds, ...postIds])])
+        const changes = usePlanner.getState().undoHistory.length - historyStart
+        if (changes > 1) usePlanner.getState().groupRecentUndoActions(changes, `Mover publicaciones a ${group.name}`)
+      } else {
+        const currentTarget = usePlanner.getState().workGroups.find(item => item.id === groupId)
+        if (currentTarget) await usePlanner.getState().setWorkGroupPosts(groupId, [...new Set([...currentTarget.postIds, ...postIds])])
+      }
       clear()
     }, 'No se pudieron añadir las publicaciones a la colección')
+  }
+  const dropPostsUnassigned = (ids: string[]) => {
+    const existingIds = ids.filter(id => allPosts.some(post => post.id === id))
+    const plan = planCollectionDetach(scopedWorkGroups, existingIds)
+    if (!plan.length) return
+    void runWithErrorReporting(async () => {
+      const historyStart = usePlanner.getState().undoHistory.length
+      for (const entry of plan) await usePlanner.getState().setWorkGroupPosts(entry.groupId, entry.postIds)
+      const changes = usePlanner.getState().undoHistory.length - historyStart
+      if (changes > 1) usePlanner.getState().groupRecentUndoActions(changes, `Quitar publicaciones de ${plan.length} colecciones`)
+      clear()
+    }, 'No se pudieron quitar las publicaciones de las colecciones')
   }
   const selectedPosts = selected.size > 1 ? allPosts.filter(post => selected.has(post.id)) : []
   const attachMediaToSelectedPosts = async (attachments: Array<{ postId: string; assets: MediaAsset[] }>) => {
@@ -255,9 +283,10 @@ export function Board({ onEditSelection, onPickPost, pickMode = false, pickedPos
   const archivedGroupPostIds = new Set(archivedGroups.flatMap(group => group.postIds))
   const archivedCount = collectionNavPosts.filter(post => post.status === 'archived' && !archivedGroupPostIds.has(post.id)).length
   const archiveEntryCount = archivedCount + archivedGroups.length
+  const restoreArchivedStack = (ids: string[], status: Post['status']) => { void runWithErrorReporting(() => moveWithStacks(ids, status, { groupLabel: 'Restaurar pila' }), 'No se pudo restaurar la pila') }
   return <section className={`workspace board-mode-${boardMode}${pickMode ? ' editor-session-pick-mode' : ''}`}><BoardHeader boardMode={boardMode} changeBoardMode={changeBoardMode} visiblePerColumn={visiblePerColumn} loadMore={() => setVisiblePerColumn(current => Math.min(100, current + 30))} detailLevel={boardCardDetailLevel} changeDetailLevel={changeBoardCardDetailLevel} />
     {pickMode && <div className="editor-session-pick-notice" role="status"><strong>Modo añadir pestañas</strong><span>Haz clic en más publicaciones para sumarlas al editor.</span></div>}
-    {boardMode === 'kanban' && <BoardCollectionNav groups={orderedScopedWorkGroups} posts={collectionNavPosts} selectedWorkGroup={selectedWorkGroup} setActiveWorkGroup={setActiveWorkGroup} openGroupForm={openGroupForm} onDropPosts={dropPostsInCollection} onEditGroup={group => openGroupForm(group)} onColor={changeCollectionColor} onGroupAction={(type, group) => setPendingGroupAction({ type, group })} groupUncompressedMediaCount={groupUncompressedMediaCount} setPendingMediaCompression={(id, name, mediaCount) => setPendingMediaCompression({ target: 'group', id, name, mediaCount })} restoreGroupMedia={restoreGroupMedia} trailing={<BoardWorkGroupToolbar boardMode={boardMode} selectedWorkGroup={selectedWorkGroup} archivedCount={archiveEntryCount} showArchivedPosts={showArchivedPosts} setShowArchivedPosts={setShowArchivedPosts} openGroupForm={openGroupForm} />} />}
+    {boardMode === 'kanban' && <BoardCollectionNav groups={orderedScopedWorkGroups} posts={collectionNavPosts} selectedWorkGroup={selectedWorkGroup} setActiveWorkGroup={setActiveWorkGroup} openGroupForm={openGroupForm} onDropPosts={dropPostsInCollection} onDropPostsUnassigned={dropPostsUnassigned} onEditGroup={group => openGroupForm(group)} onColor={changeCollectionColor} onGroupAction={(type, group) => setPendingGroupAction({ type, group })} groupUncompressedMediaCount={groupUncompressedMediaCount} setPendingMediaCompression={(id, name, mediaCount) => setPendingMediaCompression({ target: 'group', id, name, mediaCount })} restoreGroupMedia={restoreGroupMedia} trailing={<BoardWorkGroupToolbar boardMode={boardMode} selectedWorkGroup={selectedWorkGroup} archivedCount={archiveEntryCount} showArchivedPosts={showArchivedPosts} setShowArchivedPosts={setShowArchivedPosts} openGroupForm={openGroupForm} />} />}
     {boardMode !== 'kanban' && <BoardWorkGroupToolbar boardMode={boardMode} selectedWorkGroup={selectedWorkGroup} archivedCount={archiveEntryCount} showArchivedPosts={showArchivedPosts} setShowArchivedPosts={setShowArchivedPosts} openGroupForm={openGroupForm} />}
     {boardMode === 'list' && <BoardListFilters workGroups={scopedWorkGroups} status={listStatus} setStatus={setListStatus} format={listFormat} setFormat={setListFormat} group={listGroup} setGroup={setListGroup} from={listFrom} setFrom={setListFrom} to={listTo} setTo={setListTo} />}
     {mediaCompressionMessage && <p className="work-group-export-message" role="status">{mediaCompressionMessage}</p>}
@@ -294,7 +323,7 @@ export function Board({ onEditSelection, onPickPost, pickMode = false, pickedPos
     {pasteDialog && <PastePostsDialog blocks={pasteDialog.blocks} text={pasteDialog.text} posts={allPosts} onCreate={async blocks => { await createPostsFromBlocks(pasteDialog.target, blocks) }} onUpdate={(pairs, fields, includeSlides, replaceSlides) => updatePostsFromBlocks(pairs, fields, includeSlides, replaceSlides)} onClose={() => setPasteDialog(null)} />}
     <BoardBulkActions selected={selected} selectedPosts={selectedPosts} onAttachMedia={attachMediaToSelectedPosts} workGroups={scopedWorkGroups} selectedWorkGroup={selectedWorkGroup} membershipTargetGroupId={membershipTargetGroupId} setMembershipTargetGroupId={setMembershipTargetGroupId} updateGroupMembership={updateGroupMembership} openGroupForm={openGroupForm} clear={clear} boardMode={boardMode} mobileExportBusy={mobileExportBusy} exportSelectedToMobile={exportSelectedToMobile} bulkScheduleAt={bulkScheduleAt} setBulkScheduleAt={setBulkScheduleAt} setBulkScheduleWarning={setBulkScheduleWarning} bulkSchedule={bulkSchedule} bulkMove={bulkMove} bulkScheduleWarning={bulkScheduleWarning} spaces={Array.from(new Set([...customSpaces, ...allPosts.map(post => post.project)].filter(Boolean)))} moveToSpace={space => runWithErrorReporting(async () => { await movePostsToSpace([...selected], space); clear() }, 'No se pudieron mover las publicaciones de proyecto')} onStackSelection={() => runWithErrorReporting(async () => { if (selected.size < 2) return; const target = allPosts.find(post => selected.has(post.id)); if (!target) return; await stackPosts(target.id, [...selected]); clear() }, 'No se pudo apilar la selección')} />
     {mobileExportMessage && <div className="work-group-export-message" role="status"><p>{mobileExportMessage}</p>{mobileExportSkipped.map((item, index) => <p key={`${index}-${item}`}>Omitida: {item}</p>)}</div>}
-    <BoardArchivedMedia archivedPosts={archivedPosts} archivedGroups={archivedGroups} collectionPosts={collectionNavPosts} compressedPosts={compressedPosts} showArchivedPosts={showArchivedPosts} showCompressedPosts={showCompressedPosts} setShowCompressedPosts={setShowCompressedPosts} select={select} setPendingMediaCompression={setPendingMediaCompression} restorePostMedia={restorePostMedia} restoreGroup={group => setPendingGroupAction({ type: 'restore', group })} openGroup={group => setActiveWorkGroup(group.id)} />
+    <BoardArchivedMedia archivedPosts={archivedPosts} archivedGroups={archivedGroups} collectionPosts={collectionNavPosts} compressedPosts={compressedPosts} showArchivedPosts={showArchivedPosts} showCompressedPosts={showCompressedPosts} setShowCompressedPosts={setShowCompressedPosts} select={select} setPendingMediaCompression={setPendingMediaCompression} restorePostMedia={restorePostMedia} restoreGroup={group => setPendingGroupAction({ type: 'restore', group })} restoreStack={restoreArchivedStack} openGroup={group => setActiveWorkGroup(group.id)} />
     {!visibleBoardPosts.length && <div className="planner-empty-inline board-empty" role="status"><strong>{selectedWorkGroup && !posts.length ? 'Esta colección todavía no tiene publicaciones visibles' : query.trim() && posts.length === 0 ? 'No hay publicaciones que coincidan con la búsqueda' : archivedCount ? 'Todas las publicaciones de este espacio están archivadas' : scopedWorkGroups.some(group => !group.archivedAt && group.postIds.some(id => posts.some(post => post.id === id))) ? 'No hay publicaciones sin colección' : 'Este espacio aún no tiene publicaciones'}</strong><span>{selectedWorkGroup && !posts.length ? 'Selecciona publicaciones del tablero y añádelas a esta colección.' : query.trim() && posts.length === 0 ? 'Limpia la búsqueda para volver a ver el tablero.' : scopedWorkGroups.some(group => !group.archivedAt && group.postIds.some(id => posts.some(post => post.id === id))) ? 'Las publicaciones que pertenecen a colecciones aparecen al entrar en ellas.' : 'Crea una publicación o convierte una idea para empezar.'}</span>{query.trim() && posts.length === 0 && <button type="button" className="settings-button" onClick={() => setQuery('')}>Limpiar búsqueda</button>}</div>}
     {boardMode === 'kanban' && <AreaSelectionSurface className="board-lanes-scroll" selected={selected} setSelected={boardSelection.set}><BoardLanes lanes={boardLanes} posts={visibleBoardPosts} activeGroups={activeGroups} selected={selected} collapsedLanes={collapsedLanes} toggleLane={toggleLane} reorderLane={reorderLane} visiblePerColumn={visiblePerColumn} mobilePublicationState={mobilePublicationState} boardCardDetailLevel={boardCardDetailLevel} dragIds={dragIds} onToggle={toggle} onSelect={select} onPickPost={onPickPost} pickedPostIds={pickedPostIds} onColor={changePostCardColor} onMove={moveDragged} onSelectStatus={toggleStatusSelection} onDuplicate={duplicateBoardPost} onPastePosts={pastePostsFromClipboard} onOpenPasteDialog={openPasteDialog} allPosts={allPosts} onApplyFields={applyFieldsFromClipboard} onDelete={deleteBoardPost} onStatus={changeBoardPostStatus} onNewPost={onCreatePostInStatus} onEditSelection={() => onEditSelection(allPosts.filter(post => selected.has(post.id)).map(post => post.id))} onArchive={ids => { void bulkMove('archived', ids) }} scheduleAt={bulkScheduleAt} scheduleWarning={bulkScheduleWarning} onScheduleAtChange={value => { setBulkScheduleAt(value); setBulkScheduleWarning('') }} onSchedule={bulkSchedule} onClearSchedule={bulkClearSchedule} onFormat={(ids, contentType) => bulkFormat(contentType, ids)} /></AreaSelectionSurface>}
   </section>

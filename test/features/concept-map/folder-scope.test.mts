@@ -16,14 +16,14 @@ const folders = [
 ]
 const nodes = [node('root', null), node('in-x', 'x'), node('in-x-detail', 'x-detail'), node('in-y', 'y')]
 
-test('folder and node scope hides other spaces but keeps global content reachable', () => {
+test('el ámbito de carpetas y nodos oculta otros espacios pero mantiene accesible el contenido global', () => {
   const inX = foldersInScope(folders, 'X')
   assert.deepEqual(inX.map(item => item.id), ['general', 'x', 'x-detail'])
   assert.deepEqual(foldersInScope(folders, null).map(item => item.id), ['general', 'x', 'x-detail', 'y'])
   assert.deepEqual([...nodeIdsInScope(inX, nodes)], ['root', 'in-x', 'in-x-detail'])
 })
 
-test('exporting a space folder includes its subfolders but never another space', () => {
+test('exportar una carpeta de espacio incluye sus subcarpetas pero nunca otro espacio', () => {
   const scoped = foldersInScope(folders, 'X')
   const payload = buildExport(scoped, nodes, [link('cross', 'in-x', 'in-y'), link('inside', 'in-x', 'in-x-detail')], 'x', 'X / general')
 

@@ -7,7 +7,7 @@ import {
 import { es } from 'date-fns/locale'
 import { Archive, ArchiveRestore, CalendarDays, ChevronLeft, ChevronRight, Clock3, FileImage, FileText, Film, FolderOpen, FolderPlus, GripVertical, List, Minimize2, MoreHorizontal, Pencil, Plus, Smartphone, Trash2 } from 'lucide-react'
 import { contentLabels, stages, statusMeta } from '../../shared/constants'
-import { postColors } from '../../shared/postColors'
+import { postAccentColor } from '../../shared/postColors'
 import { PlatformMark, ViewHeading } from '../../components/layout/AppShell'
 import { reportAppError, runWithErrorReporting } from '../../app/errors'
 import { postMatchesQuery, usePlanner } from '../../app/store'
@@ -120,7 +120,7 @@ export function CalendarView({ onPickPost, pickMode = false, pickedPostIds = new
           }
         }}>{format(day, 'd')}</button>
         <div className="month-day-posts">
-          {visibleDayPosts.map(post => <button draggable className={pickedPostIds.has(post.id) ? 'session-picked' : ''} onDragStart={event => event.dataTransfer.setData('post', post.id)} key={post.id} style={{ '--post-color': post.color } as React.CSSProperties} onClick={() => openPost(post.id)} title={post.title}><span>{post.scheduledAt && format(parseISO(post.scheduledAt), 'HH:mm')}</span>{post.title}</button>)}
+          {visibleDayPosts.map(post => <button draggable className={pickedPostIds.has(post.id) ? 'session-picked' : ''} onDragStart={event => event.dataTransfer.setData('post', post.id)} key={post.id} style={{ '--post-color': postAccentColor(post.color) } as React.CSSProperties} onClick={() => openPost(post.id)} title={post.title}><span>{post.scheduledAt && format(parseISO(post.scheduledAt), 'HH:mm')}</span>{post.title}</button>)}
           {hiddenCount > 0 && <button type="button" className="month-day-more" aria-haspopup="dialog" aria-expanded={dayPopover?.dayKey === dayKey} onClick={event => {
             setDayPopover({ dayKey, anchor: event.currentTarget })
             setDayPopoverPosition(null)
@@ -134,7 +134,7 @@ export function CalendarView({ onPickPost, pickMode = false, pickedPostIds = new
         .sort((first, second) => new Date(first.scheduledAt || '').getTime() - new Date(second.scheduledAt || '').getTime())
       return <div ref={dayPopoverRef} className="calendar-day-popover" role="dialog" aria-label={`Publicaciones del ${format(selectedDay, 'd MMMM yyyy', { locale: es })}`} style={{ top: dayPopoverPosition?.top ?? 0, left: dayPopoverPosition?.left ?? 0, visibility: dayPopoverPosition ? 'visible' : 'hidden' }}>
         <header><strong>{format(selectedDay, 'EEEE d MMMM', { locale: es })}</strong><button type="button" aria-label="Cerrar publicaciones del día" onClick={() => { setDayPopover(null); setDayPopoverPosition(null) }}>×</button></header>
-        <div className="calendar-day-popover-list">{dayPosts.length ? dayPosts.map(post => <button type="button" className={pickedPostIds.has(post.id) ? 'session-picked' : ''} key={post.id} style={{ '--post-color': post.color } as React.CSSProperties} aria-current={selectedId === post.id ? 'true' : undefined} onClick={() => openPost(post.id)} title={post.title}>
+        <div className="calendar-day-popover-list">{dayPosts.length ? dayPosts.map(post => <button type="button" className={pickedPostIds.has(post.id) ? 'session-picked' : ''} key={post.id} style={{ '--post-color': postAccentColor(post.color) } as React.CSSProperties} aria-current={selectedId === post.id ? 'true' : undefined} onClick={() => openPost(post.id)} title={post.title}>
           <time>{post.scheduledAt && format(parseISO(post.scheduledAt), 'HH:mm')}</time><span>{post.title || 'Publicación sin título'}</span>
         </button>) : <p>No hay publicaciones programadas este día.</p>}</div>
       </div>
@@ -228,7 +228,7 @@ export function BoardDaySwitcher({ onPickPost, pickedPostIds = new Set<string>()
   return createPortal(<div className="board-day-switcher-stack" style={{ top: position.top, left: position.left, width: position.width }}>
     {expanded && scheduledDay ? <div ref={panelRef} className="calendar-day-popover board-day-switcher expanded" role="dialog" aria-label={`Publicaciones del ${format(scheduledDay, 'd MMMM yyyy', { locale: es })}`}>
       <header><strong>{format(scheduledDay, 'EEEE d MMMM', { locale: es })}</strong><button type="button" aria-label="Minimizar publicaciones del día" onClick={() => setExpanded(false)}><Minimize2 size={13} /></button></header>
-      <div className="calendar-day-popover-list">{dayPosts.map(post => <button type="button" className={pickedPostIds.has(post.id) ? 'session-picked' : ''} key={post.id} style={{ '--post-color': post.color } as React.CSSProperties} aria-current={selectedId === post.id ? 'true' : undefined} onClick={() => { if (!onPickPost?.(post.id)) select(post.id) }} title={post.title}>
+      <div className="calendar-day-popover-list">{dayPosts.map(post => <button type="button" className={pickedPostIds.has(post.id) ? 'session-picked' : ''} key={post.id} style={{ '--post-color': postAccentColor(post.color) } as React.CSSProperties} aria-current={selectedId === post.id ? 'true' : undefined} onClick={() => { if (!onPickPost?.(post.id)) select(post.id) }} title={post.title}>
         <time>{post.scheduledAt && format(parseISO(post.scheduledAt), 'HH:mm')}</time><span>{post.title || 'Publicación sin título'}</span>
       </button>)}</div>
     </div> : <div className="board-day-switcher-minimized">

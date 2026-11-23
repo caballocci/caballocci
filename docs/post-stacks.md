@@ -1,12 +1,12 @@
 # Pilas de publicaciones en el tablero — plan de diseño
 
-Estado: **implementado en `feature/10Nov26`** (migración `v34` + persistencia + store + UI del tablero). Semántica como la aprobada (§10, §9); notas de implementación en §11.
+Estado: **implementado en `feature/10Nov26`** (migraciones `v34` y `v36` + persistencia + store + UI del tablero). Semántica como la aprobada (§10, §9); notas de implementación en §11.
 
 ## 1. Semántica
 
 - Una **pila** agrupa publicaciones hermanas dentro de **una sola columna** (mismo `status`). Sirve para piezas hermanas de una misma idea o campaña (carruseles, variantes), sin imponer nada.
 - **Orden manual**: la tarjeta de arriba (menor `stack_position`) representa la pila; las demás siguen el orden que el usuario defina arrastrándolas en la vista expandida. No hay «portada» especial.
-- La pila **no tiene nombre propio**: se identifica por la tarjeta que está arriba.
+- La pila **puede tener un nombre propio opcional**; si no lo tiene, se identifica por la tarjeta que está arriba.
 - Colecciones (`work_groups`) **y pilas** son independientes: cada publicación conserva sus membresías; una pila no es una colección ni subcolección.
 - El calendario muestra cada publicación por separado (sin indicador de pila en esta fase).
 - El contador de la columna cuenta publicaciones (5 son 5), nunca pilas.
@@ -17,7 +17,7 @@ Estado: **implementado en `feature/10Nov26`** (migración `v34` + persistencia +
 
 1. La pila vive en una sola columna. Si una apilada cambia de estado, **sale de la pila automáticamente**.
 2. Mover la pila a otra columna mueve todas las tarjetas juntas (se conservan apiladas en la columna destino).
-3. Sin nombre propio; se identifica por la tarjeta superior.
+3. Nombre opcional; si no se define, se identifica por la tarjeta superior.
 4. Contador de columna = publicaciones, no pilas.
 
 ### Generalización (punto 2 del usuario)
@@ -143,7 +143,6 @@ Migración v34; tipos `Post.stackId/stackPosition`; `PostsRepository` escribe y 
 
 - Indicador «pertenece a una pila» en calendario/línea de tiempo.
 - Pilas entre columnas.
-- Nombres de pila.
 - Archivos sincronizados al móvil con semántica de pila (siguen siendo posts independientes).
 - Multi-selección dentro de la pila expandida (MVP: una a la vez).
 
@@ -177,5 +176,7 @@ Migración v34; tipos `Post.stackId/stackPosition`; `PostsRepository` escribe y 
 - La `save()` del store detecta cambios de `status`/`project` y desapila en el mismo `batch` de undo; `moveWithStacks` mueve la pila entera cuando **todos** sus miembros están en el conjunto arrastrado (mantener pila); conserva pilas en el caso contrario suelta los no-selectos.
 - `posts:reassign-project` acepta `keepStacks` para distinguir renombrar espacio (conserva pilas) de quitar espacio (deshace).
 - `stackPosts` fusiona pilas arrastradas al final de la destino conservando su orden relativo; desapila al arrastrar fuera de la lista expandida (mismo comportamiento sea en la misma columna o entre columnas).
-- Verificado con `test/electron/post-stacks.test.mts` (round-trip de v34 + repositorio) y `npm test` (66/66).
+- **Nombres de pila (migración `v36`)**: `posts.stack_name` nullable. El nombre se guarda en cada miembro (misma duplicación controlada que `stack_id`), se edita en la cabecera de la pila expandida (`renameStack`) y se limpia al desapilar, al salir de la columna/espacio o al disolverse la pila. Sin nombre, la tarjeta superior sigue identificando la pila.
+- **Archivadas**: las pilas archivadas se agrupan en una sola tarjeta con su nombre, listan sus miembros y se restauran como unidad a la etapa elegida (`moveWithStacks` con todos los miembros conserva la pila). La sección pagina de 6 en 6.
+- Verificado con `test/electron/post-stacks.test.mts` (round-trip de v34/v36 + repositorio) y `npm test` (104/104).
 

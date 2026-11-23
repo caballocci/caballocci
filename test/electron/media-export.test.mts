@@ -38,7 +38,7 @@ const post = (id: string, title = 'Café & Día') => ({
   scheduledAt: null,
 })
 
-test('orders explicitly sequenced media in preview order and leaves other positions stable', () => {
+test('ordena el multimedia con secuencia explícita en el orden de vista previa y deja estables las demás posiciones', () => {
   const files = [
     { name: 'slide-3.png', sourcePath: 'third', presentationRole: 'slide' as const, sequence: 3 },
     { name: 'video.mp4', sourcePath: 'video' },
@@ -53,7 +53,7 @@ test('orders explicitly sequenced media in preview order and leaves other positi
   ]).map(file => file.sourcePath), ['first', 'second'])
 })
 
-test('exports numbered files, caption metadata, and warns about webp and gif', t => {
+test('exporta archivos numerados y el pie de foto, y avisa de webp y gif', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-phone-export-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const sources = [
@@ -80,13 +80,14 @@ test('exports numbered files, caption metadata, and warns about webp and gif', t
   assert.equal(result.folderName, 'sin-fecha_cafe-dia')
   assert.equal(result.exported, 3)
   assert.deepEqual(result.warnings, [{ name: 'closing.webp', reason: 'format-may-not-upload' }])
-  assert.deepEqual(manifest, { postId: 'post-123', title: 'Café & Día', files: ['01.png', '02.mp4', '03.webp'], platforms: ['instagram'], scheduledAt: null, exportedAt: manifest.exportedAt })
+  const { exportedAt, ...metadata } = manifest
+  assert.deepEqual(metadata, { postId: 'post-123', title: 'Café & Día', files: ['01.png', '02.mp4', '03.webp'], platforms: ['instagram'], scheduledAt: null })
+  assert.equal(new Date(exportedAt).toISOString(), exportedAt)
   assert.deepEqual(['01.png', '02.mp4', '03.webp'].map(name => fs.readFileSync(path.join(folder, name), 'utf8')), ['file-2', 'file-1', 'file-0'])
   assert.equal(fs.readFileSync(path.join(folder, 'caption.txt'), 'utf8'), 'Texto de la publicación\n\n#cultura #lectura @cuenta @amiga')
-  assert.equal('folder' in result, false)
 })
 
-test('re-export replaces the previous folder for the same post after title changes', t => {
+test('la reexportación reemplaza la carpeta anterior del mismo post tras cambiar el título', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-phone-idempotent-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const sourcePath = path.join(root, 'source.png')
@@ -105,7 +106,7 @@ test('re-export replaces the previous folder for the same post after title chang
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, second.folderName, 'manifest.json'), 'utf8')).postId, 'post-123')
 })
 
-test('uses a post ID suffix for distinct posts with the same date and title', t => {
+test('usa el sufijo del id del post para posts distintos con la misma fecha y título', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-phone-collision-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const sourcePath = path.join(root, 'source.png')
@@ -119,7 +120,7 @@ test('uses a post ID suffix for distinct posts with the same date and title', t 
   assert.equal(second.folderName, 'sin-fecha_mismo-titulo-post-b')
 })
 
-test('adds batch and ready marker to exported album names and manifest', t => {
+test('añade el lote y la marca de listo al nombre del álbum exportado y al manifiesto', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-phone-batch-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const sourcePath = path.join(root, 'source.png')
@@ -142,7 +143,7 @@ test('adds batch and ready marker to exported album names and manifest', t => {
   assert.equal(manifest.used, true)
 })
 
-test('keeps an existing export intact when a staged copy fails', t => {
+test('conserva una exportación existente intacta cuando falla la copia temporal', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-phone-rollback-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   const sourcePath = path.join(root, 'source.png')

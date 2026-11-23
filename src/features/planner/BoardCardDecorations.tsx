@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CalendarClock, Smartphone } from 'lucide-react'
-import { postColors } from '../../shared/postColors'
+import { DEFAULT_POST_COLOR, isDefaultPostColor, postColors } from '../../shared/postColors'
 import { formatElapsedSince, formatMarkedAt, interestLevelLabels, interestLevelNames, type PostInterestLevel } from '../../shared/post-marks'
 import type { Post } from '../../shared/types'
 import './post-marks.css'
@@ -115,7 +115,7 @@ export function BoardCardColorPicker({ post, onColor }: { post: Post; onColor(co
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const optionsRef = useRef<HTMLDivElement>(null)
-  const defaultColor = postColors[0].value
+  const usesDefaultColor = isDefaultPostColor(post.color)
   const close = () => { setOpen(false); setPosition(null) }
   useEffect(() => {
     if (!open) return
@@ -144,10 +144,10 @@ export function BoardCardColorPicker({ post, onColor }: { post: Post; onColor(co
     setOpen(true)
   }
   return <div className="board-card-color-picker" onClick={event => event.stopPropagation()}>
-    <button ref={triggerRef} type="button" className="board-card-color-trigger" aria-label="Cambiar color de tarjeta" aria-expanded={open} title="Color de tarjeta" style={{ backgroundColor: post.color }} onClick={toggle} />
+    <button ref={triggerRef} type="button" className={`board-card-color-trigger${usesDefaultColor ? ' is-default' : ''}`} aria-label="Cambiar color de tarjeta" aria-expanded={open} title={usesDefaultColor ? 'Sin color' : 'Color de tarjeta'} style={{ backgroundColor: usesDefaultColor ? 'transparent' : post.color }} onClick={toggle} />
     {open && position && createPortal(<div ref={optionsRef} className="board-card-color-options" role="group" aria-label="Colores de tarjeta" style={{ top: position.top, left: position.left }} onClick={event => event.stopPropagation()}>
       {postColors.map(color => <button type="button" key={color.value} aria-label={color.label} title={color.label} aria-pressed={post.color === color.value} style={{ backgroundColor: color.value }} onClick={() => { onColor(color.value); setOpen(false) }} />)}
-      <button type="button" className="board-card-color-reset" aria-label="Usar color predeterminado" title="Color predeterminado" aria-pressed={post.color === defaultColor} onClick={() => { onColor(defaultColor); close() }}>Predeterminado</button>
+      <button type="button" className="board-card-color-reset" aria-label="Quitar color de tarjeta" title="Sin color" aria-pressed={usesDefaultColor} onClick={() => { onColor(DEFAULT_POST_COLOR); close() }}><i aria-hidden="true" />Sin color</button>
     </div>, document.body)}
   </div>
 }

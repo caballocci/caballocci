@@ -426,4 +426,9 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS concept_map_folders_space_idx ON concept_map_folders(space, parent_id);
     `,
   },
+  {
+    version: 36,
+    name: 'post_stack_names',
+    up: `ALTER TABLE posts ADD COLUMN stack_name TEXT NULL;`,
+  },
 ]

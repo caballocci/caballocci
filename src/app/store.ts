@@ -62,6 +62,7 @@ interface PlannerState {
   stackPosts(targetId: string, ids: string[], options?: { recordHistory?: boolean }): Promise<void>
   unstackPost(id: string, options?: { recordHistory?: boolean }): Promise<void>
   reorderStack(stackId: string, orderedIds: string[], options?: { recordHistory?: boolean }): Promise<void>
+  renameStack(stackId: string, name: string, options?: { recordHistory?: boolean }): Promise<void>
   moveWithStacks(ids: string[], status: PostStatus, options?: { groupLabel?: string; recordHistory?: boolean }): Promise<void>
   saveWorkGroup(group: WorkGroupInput, options?: { recordHistory?: boolean }): Promise<WorkGroup>
   setWorkGroupPosts(id: string, postIds: string[], options?: { recordHistory?: boolean }): Promise<WorkGroup>
@@ -71,6 +72,7 @@ interface PlannerState {
   move(id: string, status: PostStatus, options?: { recordHistory?: boolean; keepStack?: boolean }): Promise<void>
   movePostsToSpace(postIds: string[], space: string): Promise<number>
   saveIdea(idea: IdeaInput, options?: { recordHistory?: boolean }): Promise<Idea>
+  refreshIdeas(): Promise<void>
   saveIdeasMany(ideas: IdeaInput[]): Promise<{ created: Idea[]; skipped: number; duplicates: Array<{ title: string; sourceName: string; existingId: string; existingTitle: string; existingSourceName: string }> }>
   removeIdea(id: string, options?: { recordHistory?: boolean }): Promise<void>
   convertIdea(id: string): Promise<Post>
@@ -172,7 +174,7 @@ async function renumberStackMembers(get: () => PlannerState, stackId: string) {
   for (let index = 0; index < members.length; index += 1) {
     const member = members[index]
     if (members.length === 1) {
-      if (member.stackId !== null || member.stackPosition !== null) await get().save({ ...member, stackId: null, stackPosition: null })
+      if (member.stackId !== null || member.stackPosition !== null || member.stackName) await get().save({ ...member, stackId: null, stackPosition: null, stackName: null })
       continue
     }
     if (member.stackPosition !== index) await get().save({ ...member, stackPosition: index })
@@ -266,7 +268,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const historyStart = get().undoHistory.length
     const statusChanged = Boolean(before && (before.status !== post.status || before.project !== post.project))
     const stackExit = Boolean(statusChanged && before?.stackId && !options?.keepStack)
-    const saved = await window.planner.posts.save(stackExit ? { ...post, stackId: null, stackPosition: null } : post)
+    const saved = await window.planner.posts.save(stackExit ? { ...post, stackId: null, stackPosition: null, stackName: null } : post)
     set(state => {
       const changed = JSON.stringify(before) !== JSON.stringify(saved)
       return {
@@ -417,11 +419,12 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       ? get().posts.filter(item => item.stackId === stackId).sort((a, b) => (a.stackPosition ?? 0) - (b.stackPosition ?? 0)).map(item => item.id)
       : [targetId]
     const sequence = [...existing, ...newMembers.map(item => item.id)]
+    const stackName = target.stackName ?? newMembers.find(item => item.stackName)?.stackName ?? null
     for (let index = 0; index < sequence.length; index += 1) {
       const member = get().posts.find(item => item.id === sequence[index])
       if (!member) continue
-      if (member.stackId === stackId && member.stackPosition === index) continue
-      await get().save({ ...member, stackId, stackPosition: index }, options)
+      if (member.stackId === stackId && member.stackPosition === index && (member.stackName ?? null) === stackName) continue
+      await get().save({ ...member, stackId, stackPosition: index, stackName }, options)
     }
     for (const otherStack of sourceStacks) if (otherStack !== stackId) await renumberStackMembers(get, otherStack)
     const count = get().undoHistory.length - start
@@ -432,7 +435,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     if (!post?.stackId) return
     const stackId = post.stackId
     const start = get().undoHistory.length
-    await get().save({ ...post, stackId: null, stackPosition: null }, options)
+    await get().save({ ...post, stackId: null, stackPosition: null, stackName: null }, options)
     await renumberStackMembers(get, stackId)
     const count = get().undoHistory.length - start
     if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, 'Desapilar publicación')
@@ -450,6 +453,16 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     }
     const count = get().undoHistory.length - start
     if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, 'Reordenar pila')
+  },
+  renameStack: async (stackId, name, options) => {
+    const members = get().posts.filter(item => item.stackId === stackId)
+    if (members.length < 2) return
+    const normalized = name.trim().slice(0, 120) || null
+    if (members.every(member => (member.stackName ?? null) === normalized)) return
+    const start = get().undoHistory.length
+    for (const member of members) await get().save({ ...member, stackName: normalized }, options)
+    const count = get().undoHistory.length - start
+    if (options?.recordHistory !== false && count > 1) get().groupRecentUndoActions(count, 'Renombrar pila')
   },
   moveWithStacks: async (ids, status, options) => {
     const start = get().undoHistory.length
@@ -487,6 +500,13 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       undoNotice: null,
     }))
     return saved
+  },
+  refreshIdeas: async () => {
+    const ideas = await window.planner.ideas.list()
+    set(state => ({
+      ideas,
+      selectedIdeaId: state.selectedIdeaId && ideas.some(idea => idea.id === state.selectedIdeaId) ? state.selectedIdeaId : null,
+    }))
   },
   saveIdeasMany: async (ideas) => {
     const sourceView = get().view
@@ -722,7 +742,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
         await get().saveWorkGroup({ id: group.id, name: group.name, description: group.description, space: '' }, { recordHistory: false })
       }
       set({
-        posts: get().posts.map(post => post.project === space ? { ...post, project: 'Mi contenido', stackId: null, stackPosition: null } : post),
+        posts: get().posts.map(post => post.project === space ? { ...post, project: 'Mi contenido', stackId: null, stackPosition: null, stackName: null } : post),
         ideas: get().ideas.map(idea => idea.space === space ? { ...idea, space: 'Mi contenido' } : idea),
       })
     }

@@ -1,14 +1,10 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import path from 'node:path'
 import test from 'node:test'
-import initSqlJs from 'sql.js'
 import type { Database } from 'sql.js'
+import { freshDb } from '../helpers/database.mts'
 
 const require = createRequire(import.meta.url)
-const { runMigrations } = require('../../dist-electron/database/migration-runner.js') as {
-  runMigrations(db: Database, existedAtStartup: boolean, backup: () => void): void
-}
 const { WorkGroupsRepository } = require('../../dist-electron/database/work-groups-repository.js') as {
   WorkGroupsRepository: new (db: Database, persist: () => void) => {
     list(): Array<Record<string, unknown>>
@@ -19,11 +15,8 @@ const { WorkGroupsRepository } = require('../../dist-electron/database/work-grou
   }
 }
 
-test('persists many-to-many work group membership and archives independently of post status', async t => {
-  const SQL = await initSqlJs({ locateFile: file => path.resolve('node_modules/sql.js/dist', file) })
-  const db = new SQL.Database()
-  t.after(() => db.close())
-  runMigrations(db, false, () => assert.fail('A new database must not require a backup'))
+test('persiste la pertenencia muchos a muchos a grupos de trabajo y archiva sin depender del estado del post', async t => {
+  const db = await freshDb(t)
 
   db.run("INSERT INTO posts (id,title,status,created_at,updated_at) VALUES ('post-a','A','draft','now','now'),('post-b','B','approved','now','now')")
   const repository = new WorkGroupsRepository(db, () => {})
@@ -53,11 +46,8 @@ test('persists many-to-many work group membership and archives independently of 
   assert.deepEqual(repository.list().find(group => group.id === series.id)?.post_ids, ['post-a'])
 })
 
-test('nested work groups: archive applies to the subtree, delete moves children up and cycles are rejected', async t => {
-  const SQL = await initSqlJs({ locateFile: file => path.resolve('node_modules/sql.js/dist', file) })
-  const db = new SQL.Database()
-  t.after(() => db.close())
-  runMigrations(db, false, () => assert.fail('A new database must not require a backup'))
+test('grupos anidados: archivar afecta al subárbol, borrar sube a los hijos y se rechazan ciclos', async t => {
+  const db = await freshDb(t)
 
   db.run("INSERT INTO posts (id,title,status,created_at,updated_at) VALUES ('post-a','A','draft','now','now')")
   const repository = new WorkGroupsRepository(db, () => {})

@@ -19,7 +19,7 @@ const AboutUpdates = lazy(() => import('../features/settings/AboutUpdates').then
 const SourcesView = lazy(() => import('../features/sources/SourcesView').then(module => ({ default: module.SourcesView })))
 
 function AppContent() {
-  const { load, loading, loadError, view, posts, selectedId, select, query, activeSpace, setView, undoHistory, redoHistory, undoNotice, undoSavedChange, redoSavedChange, clearUndoNotice } = usePlanner()
+  const { load, loading, loadError, view, posts, selectedId, select, query, activeSpace, setView, undoHistory, redoHistory, undoNotice, undoSavedChange, redoSavedChange, clearUndoNotice, refreshIdeas } = usePlanner()
   const [creating, setCreating] = useState(false)
   const [scheduledAtForNew, setScheduledAtForNew] = useState<string | null>(null)
   const [newPostSpace, setNewPostSpace] = useState<string | null>(null)
@@ -144,6 +144,12 @@ function AppContent() {
     const timeout = window.setTimeout(clearUndoNotice, 2100)
     return () => window.clearTimeout(timeout)
   }, [undoNotice, clearUndoNotice])
+  useEffect(() => {
+    const unsubscribe = window.planner.lifecycle.onQuickNoteCreated(() => {
+      void refreshIdeas().catch(error => reportAppError(error, 'No se pudo actualizar la bandeja de ideas'))
+    })
+    return unsubscribe
+  }, [refreshIdeas])
   useEffect(() => {
     let timer: number | undefined
     const unsubscribe = window.planner.lifecycle.onCloseWarning(() => {

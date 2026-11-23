@@ -4,13 +4,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import initSqlJs from 'sql.js'
 import type { Database } from 'sql.js'
+import { freshDb } from '../helpers/database.mts'
 
 const require = createRequire(import.meta.url)
-const { runMigrations } = require('../../dist-electron/database/migration-runner.js') as {
-  runMigrations(db: Database, existedAtStartup: boolean, backup: () => void): void
-}
 const { MediaCompressionRepository } = require('../../dist-electron/database/media-compression-repository.js') as {
   MediaCompressionRepository: new (db: Database, persist: () => void) => {
     compress(
@@ -27,12 +24,10 @@ const { MediaCompressionRepository } = require('../../dist-electron/database/med
   }
 }
 
-test('compresses managed unshared media into an internal ZIP and restores the original file', async t => {
-  const SQL = await initSqlJs({ locateFile: file => path.resolve('node_modules/sql.js/dist', file) })
-  const db = new SQL.Database()
+test('comprime el multimedia gestionado no compartido en un ZIP interno y restaura el archivo original', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-compression-'))
-  t.after(() => { db.close(); fs.rmSync(root, { recursive: true, force: true }) })
-  runMigrations(db, false, () => assert.fail('A new database must not require a backup'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const db = await freshDb(t)
 
   const originalPath = path.join(root, 'managed', 'Spaces', 'Campaign', 'Posts', 'post-a', 'photo.png')
   const archiveDirectory = path.join(root, 'managed', 'Media', 'Archives')
@@ -61,12 +56,10 @@ test('compresses managed unshared media into an internal ZIP and restores the or
   assert.equal(fs.existsSync(state.archivePath), false)
 })
 
-test('does not delete shared or externally referenced media during compression', async t => {
-  const SQL = await initSqlJs({ locateFile: file => path.resolve('node_modules/sql.js/dist', file) })
-  const db = new SQL.Database()
+test('no borra multimedia compartido ni referenciado externamente durante la compresión', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'caballocci-compression-safety-'))
-  t.after(() => { db.close(); fs.rmSync(root, { recursive: true, force: true }) })
-  runMigrations(db, false, () => assert.fail('A new database must not require a backup'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const db = await freshDb(t)
 
   const managedPath = path.join(root, 'managed', 'shared.png')
   const externalPath = path.join(root, 'external', 'reference.png')

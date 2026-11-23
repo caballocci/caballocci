@@ -185,5 +185,10 @@ contextBridge.exposeInMainWorld('planner', {
       ipcRenderer.on('app:close-warning', handler)
       return () => ipcRenderer.removeListener('app:close-warning', handler)
     },
+    onQuickNoteCreated: (listener: () => void) => {
+      const handler = () => listener()
+      ipcRenderer.on('planner:quick-note-created', handler)
+      return () => ipcRenderer.removeListener('planner:quick-note-created', handler)
+    },
   },
 })

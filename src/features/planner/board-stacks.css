@@ -14,14 +14,25 @@
 .board-card-slot:hover, .board-card-slot:focus-within { z-index: 6; }
 .board-stack-slot.expanded { height: auto; }
 .board-stack-layer { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; border: 1px solid #2d3730; border-radius: 6px; background: #131815; pointer-events: none; transition: transform .22s ease-out, opacity .18s ease-out; transition-delay: 0s; }
-/* Capa 1 = segundo miembro, capa 2 = tercero. El tinte es suave: da ambiente sin tapar la tarjeta. */
-.board-stack-layer-1 { transform: translate(4px, 6px); background: color-mix(in srgb, var(--stack-layer-1, #6b726c) 24%, #131815); border-color: color-mix(in srgb, var(--stack-layer-1, #2d3730) 30%, #2d3730); }
-.board-stack-layer-2 { transform: translate(8px, 12px); background: color-mix(in srgb, var(--stack-layer-2, #6b726c) 18%, #101511); border-color: color-mix(in srgb, var(--stack-layer-2, #2d3730) 24%, #2d3730); }
-.board-stack-slot:hover .board-stack-layer-1 { transform: translate(5px, 7px); }
-.board-stack-slot:hover .board-stack-layer-2 { transform: translate(10px, 14px); }
-.board-stack-slot.stack-drop-target .board-stack-layer-1 { border-color: #d0a64b; background: #262418; transform: translate(6px, 8px); transition: none; }
-.board-stack-slot.stack-drop-target .board-stack-layer-2 { border-color: #b58a3c; background: #1c1a12; transform: translate(12px, 15px); transition: none; }
-@media (prefers-reduced-motion: reduce) { .board-stack-layer { transition: none; } .board-stack-slot:hover .board-stack-layer-1, .board-stack-slot:hover .board-stack-layer-2 { transform: translate(4px, 6px); } }
+/* Capa 1 = segundo miembro, capa 2 = tercero. El desplazamiento es más ancho que alto
+   porque hacia abajo la tapa la tarjeta siguiente de la columna: la franja lateral es
+   la que comunica "hay N cosas debajo". */
+.board-stack-layer-1 { transform: translate(7px, 5px); background: color-mix(in srgb, var(--stack-layer-1, #6b726c) 26%, #131815); border-color: color-mix(in srgb, var(--stack-layer-1, #2d3730) 42%, #2d3730); }
+.board-stack-layer-2 { transform: translate(14px, 10px); background: color-mix(in srgb, var(--stack-layer-2, #6b726c) 20%, #101511); border-color: color-mix(in srgb, var(--stack-layer-2, #2d3730) 34%, #2d3730); }
+/* Franja del color del miembro que representa la capa: dice cuál es, no solo que hay otra. */
+.board-stack-layer::after { position: absolute; top: 5px; right: 0; bottom: 5px; width: 3px; border-radius: 0 2px 2px 0; content: ''; }
+.board-stack-layer-1::after { background: var(--stack-layer-1, #6b726c); }
+.board-stack-layer-2::after { background: var(--stack-layer-2, #6b726c); }
+/* Hover: abanico. Las capas siguen visibles mientras baja el preview; no se borran. */
+.board-stack-slot.stack-closed:hover .board-stack-layer-1, .board-stack-slot.stack-closed:focus-within .board-stack-layer-1 { transform: translate(9px, 3px) rotate(1.5deg); }
+.board-stack-slot.stack-closed:hover .board-stack-layer-2, .board-stack-slot.stack-closed:focus-within .board-stack-layer-2 { transform: translate(17px, 8px) rotate(-1.5deg); }
+.board-stack-slot.stack-drop-target .board-stack-layer-1 { border-color: #d0a64b; background: #262418; transform: translate(8px, 6px); transition: none; }
+.board-stack-slot.stack-drop-target .board-stack-layer-2 { border-color: #b58a3c; background: #1c1a12; transform: translate(15px, 11px); transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .board-stack-layer { transition: none; }
+  .board-stack-slot.stack-closed:hover .board-stack-layer-1, .board-stack-slot.stack-closed:focus-within .board-stack-layer-1 { transform: translate(7px, 5px); }
+  .board-stack-slot.stack-closed:hover .board-stack-layer-2, .board-stack-slot.stack-closed:focus-within .board-stack-layer-2 { transform: translate(14px, 10px); }
+}
 .board-card.board-stack-card { z-index: 1; cursor: pointer; }
 .board-stack-slot.stack-drop-target .board-card { border-color: #d0a64b; background: #26241a; box-shadow: inset 0 0 0 1px #d0a64b, 0 0 0 2px #d0a64b44; }
 .board-stack-slot.stack-drop-target .board-card::after { position: absolute; right: 6px; bottom: 6px; z-index: 6; padding: 3px 9px; border-radius: 9px; background: #d0a64b; color: #17130a; font: 700 10px 'Segoe UI', sans-serif; content: 'Apilar'; }
@@ -49,7 +60,11 @@
 /* Título del miembro superior: identifica la pila cerrada; «+N» resume el resto. */
 .board-stack-summary-title { position: relative; display: flex; flex: none; align-items: baseline; gap: 6px; min-width: 0; margin-top: 7px; color: #e6ece7; font-size: 11.5px; font-weight: 600; line-height: 15px; }
 .board-stack-summary-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.board-stack-summary-title > em { flex: none; color: var(--stack-muted); font: 600 9px 'DM Mono', monospace; font-style: normal; }
+/* Contador de miembros ocultos: visible en reposo, junto al título del tope. */
+.board-stack-summary-title > em { flex: none; padding: 1px 5px; border: 1px solid #3a463d; border-radius: 8px; background: #202823; color: #cfd8d0; font: 700 9px 'DM Mono', monospace; font-style: normal; }
+/* Pila con nombre propio: el nombre manda y el título del tope queda como subtítulo. */
+.board-stack-summary-title.named { flex-wrap: wrap; row-gap: 1px; }
+.board-stack-summary-subtitle { flex: 1 1 100%; order: 3; min-width: 0; overflow: hidden; color: #87938b; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 /* Sin tooltip en la card cerrada: el preview del hover ya lista todos los títulos y un tooltip encima lo taparia.
    El tooltip animado vive en los miembros de la pila expandida (.board-stack-member-tip). */
 .board-stack-summary-foot { display: flex; flex: none; align-items: center; gap: 6px; margin-top: auto; padding-top: 6px; }
@@ -75,28 +90,52 @@
 .board-stack-preview-item svg { flex: none; margin-top: 2px; }
 .board-stack-preview-item > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; min-width: 0; overflow: hidden; overflow-wrap: anywhere; color: #dfe7e1; font-size: 10.5px; line-height: 14px; }
 .board-stack-preview-more { padding: 5px 2px 1px; color: var(--status-color, #d0a64b); font: 600 9px 'DM Mono', monospace; letter-spacing: .04em; }
-/* Las capas se desvanecen al revelar la vista previa (con el mismo retardo de entrada). */
-.board-stack-slot.stack-closed:hover .board-stack-layer, .board-stack-slot.stack-closed:focus-within .board-stack-layer { opacity: 0; transition-delay: .15s; }
+/* Las capas no desaparecen al revelar la vista previa: se abren en abanico (regla de hover arriba). */
 /* === Fin card de pila cerrada === */
 
-/* Contenedor más oscuro y filas más claras: la jerarquía se lee de un vistazo. */
-.board-stack-expanded { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; width: 100%; margin: 0; padding: 6px; border: 1px solid var(--stack-row-border); box-shadow: inset 2px 0 0 var(--status-color, #8fbf4a); border-radius: 6px; background: var(--stack-surface); min-width: 0; }
+/* Contenedor más oscuro y filas más claras: la jerarquía se lee de un vistazo.
+   El padding es el marco de desapilado (debe coincidir con STACK_UNSTACK_FRAME):
+   al dibujarse dentro, siempre hay superficie aunque la celda esté llena. */
+.board-stack-expanded { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; width: 100%; margin: 0; --stack-unstack-frame: 16px; padding: var(--stack-unstack-frame); border: 1px solid var(--stack-row-border); box-shadow: inset 2px 0 0 var(--status-color, #8fbf4a); border-radius: 7px; background: var(--stack-surface); min-width: 0; }
 /* Soltar sobre el encabezado, un hueco o el fondo de la pila abierta también apila. */
 .board-stack-expanded.stack-drop-target { border-color: #d0a64b; box-shadow: inset 2px 0 0 #d0a64b, 0 0 0 1px #d0a64b88; }
+/* Anillo de desapilado: solo se enciende mientras se arrastra un miembro de esta pila.
+   Terracota para no confundirlo con el dorado de "apilar". */
+.board-stack-expanded::after { position: absolute; z-index: 2; inset: 0; border-radius: 6px; box-shadow: inset 0 0 0 var(--stack-unstack-frame) transparent; content: ''; pointer-events: none; transition: box-shadow .12s ease; }
+.board-stack-expanded.stack-unstack-armed::after { box-shadow: inset 0 0 0 var(--stack-unstack-frame) #b8603f1c; }
+.board-stack-expanded.stack-unstack-target::after { box-shadow: inset 0 0 0 var(--stack-unstack-frame) #c96a4733; outline: 1px dashed #d98a67; outline-offset: -1px; }
+.board-stack-unstack-label { position: absolute; z-index: 3; right: 0; bottom: 0; left: 0; height: var(--stack-unstack-frame); color: #e0a184; font: 700 8.5px/var(--stack-unstack-frame) 'DM Mono', monospace; letter-spacing: .08em; text-align: center; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.board-stack-expanded.stack-unstack-armed .board-stack-unstack-label { opacity: .5; }
+.board-stack-expanded.stack-unstack-target .board-stack-unstack-label { color: #ffd7c4; opacity: 1; }
 .board-card-slot.board-stack-slot.expanded { min-width: 0; height: auto; }
-.board-stack-expanded-header { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px 6px; border-bottom: 1px solid #252e28; color: color-mix(in srgb, var(--status-color, #d7c07c) 72%, #e8eee9); }
-.board-stack-expanded-header strong { flex: none; margin-right: auto; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.board-stack-expanded-header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "count options collapse"; align-items: center; gap: 7px; min-width: 0; padding: 2px 2px 8px; border-bottom: 1px solid #252e28; color: color-mix(in srgb, var(--status-color, #d7c07c) 72%, #e8eee9); }
+.board-stack-count { grid-area: count; display: inline-flex; align-items: center; gap: 6px; color: inherit; }
+.board-stack-expanded-header strong { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 /* Acciones sobre toda la pila: selección total y menú contextual reutilizado (archivar, programar, formato…). */
-.board-stack-select-all { display: grid; flex: none; width: 22px; height: 22px; place-items: center; cursor: pointer; }
+.board-stack-select-all { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: #aab4ac; font-size: 9px; cursor: pointer; }
 .board-stack-select-all input { width: 13px; height: 13px; margin: 0; appearance: none; border: 1px solid #68736b; border-radius: 3px; background: #171d19; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
 .board-stack-select-all input:checked, .board-stack-select-all input:indeterminate { border-color: #d0a64b; background: #d0a64b; }
 .board-stack-select-all input:checked::after { display: block; width: 4px; height: 7px; margin: 1px 0 0 4px; border: solid #171d19; border-width: 0 2px 2px 0; content: ''; transform: rotate(45deg); }
 .board-stack-select-all input:indeterminate::after { display: block; width: 7px; height: 2px; margin: 5px auto; background: #171d19; content: ''; }
 .board-stack-select-all input:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
-.board-stack-actions { display: grid; flex: none; width: 24px; height: 24px; place-items: center; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8d988f; cursor: pointer; }
+.board-stack-actions { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8d988f; cursor: pointer; }
 .board-stack-actions:hover { border-color: #3a463d; background: #222a24; color: #edf3ee; }
 .board-stack-actions:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
-.board-stack-collapse { display: grid; flex: none; width: 26px; height: 26px; place-items: center; border: 1px solid #3a463d; border-radius: 4px; background: #1c231e; color: #cfd6cf; cursor: pointer; }
+/* Nombre de la pila en la vista expandida: se edita en línea y ocupa el espacio libre del encabezado. */
+.board-stack-name { display: inline-flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 5px 8px; overflow: hidden; border: 1px dashed #3a463d; border-radius: 5px; background: #171d19; color: #cfd8d0; font-size: 10px; font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.board-stack-name.unnamed { color: #87938b; font-weight: 500; }
+.board-stack-name:hover, .board-stack-name:focus-visible { border-color: #d0a64b; color: #edf3ee; outline: none; }
+.board-stack-rename { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.board-stack-rename input { min-width: 0; height: 22px; padding: 0 7px; border: 1px solid #4a574e; border-radius: 4px; background: #171d19; color: #e6ece7; font-size: 10px; }
+.board-stack-rename button { flex: none; height: 22px; padding: 0 8px; border: 1px solid #4a574e; border-radius: 4px; background: #202823; color: #d1dad3; font-size: 9px; cursor: pointer; }
+.board-stack-rename button:hover { border-color: #d0a64b; color: #edf3ee; }
+.board-stack-options-toggle { grid-area: options; display: inline-flex; align-items: center; gap: 3px; padding: 4px 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8d988f; font-size: 9px; cursor: pointer; }
+.board-stack-options-toggle:hover, .board-stack-options-toggle:focus-visible { border-color: #3a463d; background: #202823; color: #edf3ee; }
+.board-stack-options-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.board-stack-options-toggle svg { transition: transform .15s ease; }
+.board-stack-options { display: grid; gap: 7px; padding: 8px; border: 1px solid #29332c; border-radius: 5px; background: #141a16; }
+.board-stack-option-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
+.board-stack-collapse { grid-area: collapse; display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid #3a463d; border-radius: 4px; background: #1c231e; color: #cfd6cf; cursor: pointer; }
 .board-stack-collapse:hover { background: #222a24; color: #edf3ee; border-color: #525f55; }
 .board-stack-collapse:focus-visible { outline: 2px solid #d0a64b; outline-offset: 1px; }
 /* Miembro de pila expandida: alto estable, el título nunca estira la fila */
@@ -128,7 +167,6 @@
 .board-stack-member.is-dragging { opacity: .4; border-style: dashed; cursor: grabbing; }
 .board-stack-member.reorder-over-top { box-shadow: 0 -2px 0 #d0a64b; }
 .board-stack-member.reorder-over-bottom { box-shadow: 0 2px 0 #d0a64b; }
-.board-stack-member.stack-drop-target { border-color: #d0a64b; background: #221f18; }
 /* Los íconos de plataforma bajan su saturación dentro de las filas para no competir con el acento de la etapa. */
 .board-stack-member .platform-mark,
 .board-stack-summary-platforms .platform-mark,
