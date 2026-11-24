@@ -22,6 +22,9 @@
 .board-context-menu > button:hover, .board-context-statuses > button:hover, .board-context-menu > button:focus-visible, .board-context-statuses > button:focus-visible { outline: none; background: #29332c; }
 .board-context-menu > button:disabled { opacity: .45; cursor: default; }
 .board-context-separator { height: 1px; margin: 4px 5px; background: #303a33; }
+.board-context-submenu-chevron { margin-left: auto; opacity: .7; }
+.board-context-submenu { width: 232px; }
+.board-context-submenu .board-context-schedule { margin: 0; border: 0; }
 .board-context-color-icon { flex: none; width: 13px; height: 13px; border: 1px solid #879189; border-radius: 4px; box-shadow: 0 0 0 1px #111612; }
 .board-context-color-options { display: grid; grid-template-columns: repeat(5, 22px); justify-content: start; gap: 7px; margin: 0 0 4px 16px; padding: 8px 8px 8px 10px; border-left: 1px solid #46534a; }
 .board-context-color-options > button { width: 21px; height: 21px; padding: 0; border: 1px solid #101411; border-radius: 5px; cursor: pointer; }

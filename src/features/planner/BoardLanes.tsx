@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { MobileCardStatus, PostMarkBadges, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
 import { StackClosedCard, StackExpandedList, type StackHandlers } from './BoardStacks'
 import { withClipboardPayload } from '../../shared/clipboard-payload'
-import { BoardContextMenu, BoardContextSelectionActions, BoardContextSeparator } from './BoardContextMenu'
+import { BoardContextMenu, BoardContextSelectionActions, BoardContextSeparator, BoardContextSubmenu } from './BoardContextMenu'
 import { PostCopyDialog } from './PostCopyDialog'
 import { ApplyFieldsDialog } from './ApplyFieldsDialog'
 import { reorderStackIds, resolveStackDropZone, type StackDropHover } from './stack-drop-zone'
@@ -757,10 +757,12 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
         <button type="button" className="board-context-color-reset" aria-pressed={isDefaultPostColor(context.post.color)} onClick={() => { onColor(context.post, DEFAULT_POST_COLOR); close() }}><i aria-hidden="true" />Sin color</button>
       </div>}
       <BoardContextSeparator />
-      <button type="button" role="menuitem" disabled={!context.post.caption.trim()} onClick={() => { const request = withClipboardPayload(context.post.caption, [{ kind: 'field', field: 'caption', text: context.post.caption, sourceId: context.post.id }]); void runWithErrorReporting(() => window.planner.clipboard.write(request.text, request.html), 'No se pudo copiar el texto'); close() }}><ClipboardCopy size={14} />Copiar texto</button>
-      <button type="button" role="menuitem" onClick={() => { setCopyPosts(actionIds.map(id => postById.get(id)).filter(post => post !== undefined)); close() }}><ClipboardCopy size={14} />{actionIds.length > 1 ? `Copiar ${actionIds.length} publicaciones…` : 'Copiar publicación…'}</button>
-      <button type="button" role="menuitem" disabled={!pastePreview} title={pasteMatch > 0 ? 'Cada bloque vuelve a su publicación original; también podés pegarlas como nuevas' : undefined} onClick={() => { if (pasteMatch > 0) onOpenPasteDialog(context.post); else void pastePosts(context.post); close() }}><ClipboardPaste size={14} />{pastePreview ? `Pegar ${pastePreview} ${pastePreview === 1 ? 'publicación' : 'publicaciones'}${pasteMatch > 0 ? '…' : ''}` : 'Pegar publicación'}</button>
-      <button type="button" role="menuitem" disabled={!applyPreview} title="Reemplaza los campos y anexa diapositivas de lo copiado" onClick={() => { setApplyTargets(actionIds.map(id => postById.get(id)).filter((post): post is Post => post !== undefined)); close() }}><Replace size={14} />{actionIds.length > 1 ? `Aplicar contenido a ${actionIds.length} publicaciones…` : 'Aplicar contenido copiado…'}</button>
+      <BoardContextSubmenu label="Portapapeles…" icon={<ClipboardCopy size={14} />} ariaLabel="Portapapeles">
+        <button type="button" role="menuitem" disabled={!context.post.caption.trim()} onClick={() => { const request = withClipboardPayload(context.post.caption, [{ kind: 'field', field: 'caption', text: context.post.caption, sourceId: context.post.id }]); void runWithErrorReporting(() => window.planner.clipboard.write(request.text, request.html), 'No se pudo copiar el texto'); close() }}>Copiar texto</button>
+        <button type="button" role="menuitem" onClick={() => { setCopyPosts(actionIds.map(id => postById.get(id)).filter(post => post !== undefined)); close() }}>{actionIds.length > 1 ? `Copiar ${actionIds.length} publicaciones…` : 'Copiar publicación…'}</button>
+        <button type="button" role="menuitem" disabled={!pastePreview} title={pasteMatch > 0 ? 'Cada bloque vuelve a su publicación original; también podés pegarlas como nuevas' : undefined} onClick={() => { if (pasteMatch > 0) onOpenPasteDialog(context.post); else void pastePosts(context.post); close() }}><ClipboardPaste size={14} />{pastePreview ? `Pegar ${pastePreview} ${pastePreview === 1 ? 'publicación' : 'publicaciones'}${pasteMatch > 0 ? '…' : ''}` : 'Pegar publicación'}</button>
+        <button type="button" role="menuitem" disabled={!applyPreview} title="Reemplaza los campos y anexa diapositivas de lo copiado" onClick={() => { setApplyTargets(actionIds.map(id => postById.get(id)).filter((post): post is Post => post !== undefined)); close() }}><Replace size={14} />{actionIds.length > 1 ? `Aplicar contenido a ${actionIds.length} publicaciones…` : 'Aplicar contenido copiado…'}</button>
+      </BoardContextSubmenu>
       <BoardContextSeparator />
       <button type="button" role="menuitem" onClick={() => { usePlanner.getState().requestConceptMapPosts(actionIds); close() }}><Network size={14} />Referenciar en mapa conceptual{actionIds.length > 1 ? ` (${actionIds.length})` : ''}</button>
       <button type="button" role="menuitem" onClick={() => { void runWithErrorReporting(() => window.planner.media.openFolder(context.post.id, context.post.project), 'No se pudo abrir la carpeta de media'); close() }}><FolderOpen size={14} />Abrir en el Explorador Windows</button>
