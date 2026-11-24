@@ -153,7 +153,7 @@ export function BoardContextSelectionActions({ count, hasScheduledPosts, schedul
     <BoardContextSubmenu label="Programar publicación…" icon={<CalendarDays size={14} />} ariaLabel="Programar publicación">
       <div className="board-context-schedule">
         <label>Fecha y hora<input type="datetime-local" value={scheduleAt} onChange={event => onScheduleAtChange(event.target.value)} /></label>
-        <button type="button" role="menuitem" disabled={!scheduleAt} onClick={onSchedule}>Programar {count > 1 ? 'selección' : 'publicación'}</button>
+        <button type="button" role="menuitem" disabled={!scheduleAt} onClick={onSchedule}><CalendarDays size={14} />Programar {count > 1 ? 'selección' : 'publicación'}</button>
         {hasScheduledPosts && <button type="button" role="menuitem" onClick={onClearSchedule}><Eraser size={14} />Quitar fecha y hora</button>}
         {scheduleWarning && <span className="bulk-schedule-warning" role="alert">{scheduleWarning}</span>}
       </div>
