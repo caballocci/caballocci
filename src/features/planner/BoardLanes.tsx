@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { MobileCardStatus, PostMarkBadges, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
+import { MobileCardStatus, PostMarks, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
 import { StackClosedCard, StackExpandedList, type StackHandlers } from './BoardStacks'
 import { withClipboardPayload } from '../../shared/clipboard-payload'
 import { BoardContextMenu, BoardContextSelectionActions, BoardContextSeparator, BoardContextSubmenu } from './BoardContextMenu'
@@ -663,7 +663,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
                 {post.scheduledAt && <small className={overdue ? 'overdue' : ''} title={format(parseISO(post.scheduledAt), 'd MMMM yyyy · HH:mm', { locale: es })}>
                   <CalendarDays size={12} /><span>{format(parseISO(post.scheduledAt), 'd MMM', { locale: es })}</span><time dateTime={post.scheduledAt}>{format(parseISO(post.scheduledAt), 'HH:mm')}</time>{overdue && <b>Atrasada</b>}
                 </small>}
-                {(dateMarks[post.id] || interestLevels[post.id]) && <PostMarkBadges dateMark={dateMarks[post.id]} interestLevel={interestLevels[post.id]} />}
+                {(dateMarks[post.id] || interestLevels[post.id]) && <PostMarks dateMark={dateMarks[post.id]} interestLevel={interestLevels[post.id]} />}
               </div>
             </article>
           }

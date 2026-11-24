@@ -6,7 +6,7 @@ import { PlatformMark } from '../../components/layout/AppShell'
 import { isDefaultPostColor } from '../../shared/postColors'
 import type { PostInterestLevel } from '../../shared/post-marks'
 import type { ContentType, Post } from '../../shared/types'
-import { MobileCardStatus, MobileStackStatus, PostMarkBadges, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
+import { MobileCardStatus, MobileStackStatus, PostMarks, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
 import type { StackDropHover } from './stack-drop-zone'
 
 export const stackContentIcon = (contentType: ContentType) => contentType === 'reel' ? Film : contentType === 'carousel' ? Images : FileText
@@ -114,7 +114,7 @@ export function StackClosedCard({ items, stackId, columnStatus, selected, draggi
     </div>
     <div className="board-stack-summary-foot">
       {nextScheduled && <span className={`board-stack-summary-date${overdue ? ' overdue' : ''}`}><CalendarDays size={11} aria-hidden="true" /><span>{format(nextScheduled.time, 'd MMM', { locale: es })}</span><time dateTime={nextScheduled.post.scheduledAt ?? undefined}>{format(nextScheduled.time, 'HH:mm')}</time>{overdue && <b>Atrasada</b>}</span>}
-      {(dateMarks[top.id] || interestLevels[top.id]) && <PostMarkBadges dateMark={dateMarks[top.id]} interestLevel={interestLevels[top.id]} />}
+      {(dateMarks[top.id] || interestLevels[top.id]) && <PostMarks dateMark={dateMarks[top.id]} interestLevel={interestLevels[top.id]} />}
       <MobileStackStatus state={mobilePublicationState} postIds={memberIds} detailLevel={boardCardDetailLevel === 'hidden' ? 'hidden' : 'discreet'} />
     </div>
     {memberColors.length > 0 && <div className="board-stack-color-strip" aria-hidden="true" title={memberColors.length === 1 ? '1 color en la pila' : `${memberColors.length} colores en la pila`}>
@@ -203,7 +203,7 @@ export function StackExpandedList({ items, stackId, columnStatus, selected, drag
       {member.title && <span className="board-stack-member-tip" aria-hidden="true">{member.title}</span>}
       <div className="board-stack-member-meta">
         {member.scheduledAt && <span className="board-stack-member-date"><CalendarDays size={11} aria-hidden="true" />{format(parseISO(member.scheduledAt), 'd MMM', { locale: es })}</span>}
-        {(dateMarks[member.id] || interestLevels[member.id]) && <PostMarkBadges dateMark={dateMarks[member.id]} interestLevel={interestLevels[member.id]} />}
+        {(dateMarks[member.id] || interestLevels[member.id]) && <PostMarks dateMark={dateMarks[member.id]} interestLevel={interestLevels[member.id]} />}
         <MobileCardStatus state={mobilePublicationState} postId={member.id} detailLevel={boardCardDetailLevel === 'hidden' ? 'hidden' : 'discreet'} />
       </div>
       <button type="button" className="board-stack-member-unstack" aria-label={`Sacar de la pila: ${member.title || 'publicación'}`} title="Sacar de la pila" onClick={event => { event.stopPropagation(); handlers.unstack(member) }}><ArrowUpFromLine size={13} /></button>
