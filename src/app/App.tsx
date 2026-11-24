@@ -6,6 +6,7 @@ import { postMatchesQuery, usePlanner } from './store'
 import { AppErrorBoundary, GlobalErrorCenter } from '../components/layout/GlobalErrorCenter'
 import { UpdateDialog } from '../components/UpdateDialog'
 import type { MediaAsset, PostStatus } from '../shared/types'
+import { preferencesToSyncFromStorage } from '../shared/preference-sync'
 
 const Editor = lazy(() => import('../features/editor/Editor').then(module => ({ default: module.Editor })))
 const ConceptMap = lazy(() => import('../features/concept-map/ConceptMap').then(module => ({ default: module.ConceptMap })))
@@ -43,7 +44,7 @@ function AppContent() {
           if (value !== null) current[key] = value
         }
         const merged = await Promise.race([
-          window.planner.preferences.sync(current),
+          window.planner.preferences.sync(preferencesToSyncFromStorage(current)),
           new Promise<Record<string, string> | null>(resolve => { window.setTimeout(() => resolve(null), 20_000) }),
         ])
         if (merged === null) {
@@ -204,9 +205,10 @@ function AppContent() {
     select(result.id)
     setView('board')
   }
+  const editorOpen = Boolean(creating || selected) && !editorMinimized
   if (loading) return <div className="loading"><div className="brand-symbol"><span /><span /><span /></div><p>Preparando tu espacio local...</p></div>
   if (loadError) return <div className="loading"><div className="brand-symbol"><span /><span /><span /></div><strong>No se pudo abrir el workspace</strong><p>{loadError}</p><button className="save-button" onClick={() => void load()}>Reintentar</button></div>
-  return <div className="app">
+  return <div className={`app${editorOpen ? ' editor-open' : ''}`}>
     {undoNotice && <div className="global-undo-notice" role="status" aria-live="polite">{undoNotice}</div>}
     {closeWarning && <div className="global-close-notice" role="status" aria-live="polite">Vuelve a pulsar cerrar en 2 segundos para salir.</div>}
     <AppErrorBoundary><Sidebar /></AppErrorBoundary>

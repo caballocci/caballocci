@@ -1,12 +1,12 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import { Copy, FolderOpen, Trash2 } from 'lucide-react'
+import { Archive, Copy, FolderOpen, Trash2 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { contentLabels, statusMeta } from '../../shared/constants'
 import type { ContentType, Post, WorkGroup } from '../../shared/types'
 import { AreaSelectionSurface } from './AreaSelectionSurface'
 import { runWithErrorReporting } from '../../app/errors'
-import { BoardContextMenu, BoardContextSelectionActions } from './BoardContextMenu'
+import { BoardContextMenu, BoardContextSelectionActions, BoardContextSeparator } from './BoardContextMenu'
 
 export type BoardListSort = 'title' | 'status' | 'format' | 'collection' | 'date'
 type BoardListSortDirection = 'asc' | 'desc'
@@ -108,24 +108,26 @@ export function BoardListView({
     {context && (() => {
       const actionIds = selected.has(context.post.id) ? [...selected] : [context.post.id]
       const hasScheduledPosts = actionIds.some(id => listPosts.find(post => post.id === id)?.scheduledAt)
+      const canArchive = actionIds.some(id => listPosts.find(post => post.id === id)?.status !== 'archived')
       const close = () => setContext(null)
       return <BoardContextMenu x={context.x} y={context.y} label={`Acciones para ${context.post.title || 'publicación'}`}>
         <BoardContextSelectionActions
           count={actionIds.length}
-          canArchive={actionIds.some(id => listPosts.find(post => post.id === id)?.status !== 'archived')}
           hasScheduledPosts={hasScheduledPosts}
           scheduleAt={scheduleAt}
           scheduleWarning={scheduleWarning}
-          onArchive={() => { close(); onArchive(actionIds) }}
           onScheduleAtChange={onScheduleAtChange}
           onSchedule={() => { close(); onSchedule(actionIds) }}
           onClearSchedule={() => { close(); onClearSchedule(actionIds) }}
           onFormat={(contentType: ContentType) => { close(); onFormat(actionIds, contentType) }}
         />
+        <BoardContextSeparator />
         <button type="button" role="menuitem" onClick={() => { select(context.post.id); close() }}>{actionIds.length > 1 ? 'Editar esta publicación' : 'Abrir / editar publicación'}</button>
         {actionIds.length > 1 && <button type="button" role="menuitem" onClick={() => { onEditSelection(); close() }}>Editar selección en pestañas</button>}
         <button type="button" role="menuitem" onClick={() => { void onDuplicate(context.post); close() }}><Copy size={14} />Duplicar publicación</button>
+        <BoardContextSeparator />
         <button type="button" role="menuitem" onClick={() => { void runWithErrorReporting(() => window.planner.media.openFolder(context.post.id, context.post.project), 'No se pudo abrir la carpeta de media'); close() }}><FolderOpen size={14} />Abrir en el Explorador Windows</button>
+        <button type="button" role="menuitem" disabled={!canArchive} onClick={() => { close(); onArchive(actionIds) }}><Archive size={14} />Archivar {actionIds.length > 1 ? `selección (${actionIds.length})` : 'publicación'}</button>
         <button type="button" role="menuitem" onClick={() => { onDelete(context.post); close() }}><Trash2 size={14} />Eliminar publicación</button>
       </BoardContextMenu>
     })()}

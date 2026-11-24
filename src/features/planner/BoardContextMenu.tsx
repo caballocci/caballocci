@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Archive, CalendarDays, ChevronDown, ChevronRight, Eraser } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronRight, Eraser } from 'lucide-react'
 import { contentLabels } from '../../shared/constants'
 import type { ContentType } from '../../shared/types'
 
@@ -41,13 +41,15 @@ export function BoardContextMenu({ x, y, label, children }: { x: number; y: numb
   >{children}</div>, document.body)
 }
 
-export function BoardContextSelectionActions({ count, canArchive, hasScheduledPosts, scheduleAt, scheduleWarning, onArchive, onScheduleAtChange, onSchedule, onClearSchedule, onFormat }: {
+export function BoardContextSeparator() {
+  return <div className="board-context-separator" role="separator" />
+}
+
+export function BoardContextSelectionActions({ count, hasScheduledPosts, scheduleAt, scheduleWarning, onScheduleAtChange, onSchedule, onClearSchedule, onFormat }: {
   count: number
-  canArchive: boolean
   hasScheduledPosts: boolean
   scheduleAt: string
   scheduleWarning: string
-  onArchive(): void
   onScheduleAtChange(value: string): void
   onSchedule(): void
   onClearSchedule(): void
@@ -57,11 +59,10 @@ export function BoardContextSelectionActions({ count, canArchive, hasScheduledPo
 
   return <>
     {count > 1 && <div className="board-context-selection-note">{count} publicaciones seleccionadas</div>}
-    <button type="button" role="menuitem" disabled={!canArchive} onClick={onArchive}><Archive size={14} />Archivar {count > 1 ? `selección (${count})` : 'publicación'}</button>
     <button type="button" role="menuitem" aria-expanded={showFormats} onClick={() => setShowFormats(value => !value)}>
-      {showFormats ? <ChevronDown size={14} /> : <ChevronRight size={14} />}Cambiar formato…
+      {showFormats ? <ChevronDown size={14} /> : <ChevronRight size={14} />}Formato…
     </button>
-    {showFormats && <div className="board-context-statuses" role="group" aria-label="Cambiar formato">{(Object.keys(contentLabels) as ContentType[]).map(contentType =>
+    {showFormats && <div className="board-context-statuses" role="group" aria-label="Formato">{(Object.keys(contentLabels) as ContentType[]).map(contentType =>
       <button type="button" role="menuitem" key={contentType} onClick={() => onFormat(contentType)}>{contentLabels[contentType]}</button>,
     )}</div>}
     <div className="board-context-schedule">
