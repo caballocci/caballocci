@@ -23,8 +23,7 @@
 .board-context-menu > button:disabled { opacity: .45; cursor: default; }
 .board-context-separator { height: 1px; margin: 4px 5px; background: #303a33; }
 .board-context-submenu-chevron { margin-left: auto; opacity: .7; }
-.board-context-submenu { width: 260px; }
-/* El submenú corrige la posición; el bloque conserva el marco y el padding del menú anterior. */
+.board-context-submenu { width: 340px; max-width: calc(100vw - 16px); }
 .board-context-color-icon { flex: none; width: 13px; height: 13px; border: 1px solid #879189; border-radius: 4px; box-shadow: 0 0 0 1px #111612; }
 .board-context-color-options { display: grid; grid-template-columns: repeat(5, 22px); justify-content: start; gap: 7px; margin: 0 0 4px 16px; padding: 8px 8px 8px 10px; border-left: 1px solid #46534a; }
 .board-context-color-options > button { width: 21px; height: 21px; padding: 0; border: 1px solid #101411; border-radius: 5px; cursor: pointer; }
@@ -33,13 +32,11 @@
 .board-context-color-options > .board-context-color-reset { grid-column: 1 / -1; width: auto; height: 26px; border: 1px solid #39443c; background: #202722; color: #d1dad3; font-size: 10px; }
 .board-context-statuses { display: grid; gap: 1px; margin: 0 0 0 16px; padding-left: 6px; border-left: 1px solid #46534a; }
 .board-context-selection-note { padding: 4px 8px 7px; border-bottom: 1px solid #303a33; color: #9eaaa1; font-size: 10px; }
-.board-context-schedule { display: grid; gap: 5px; margin: 4px 0; padding: 7px 5px; border-block: 1px solid #303a33; }
-.board-context-schedule label { display: grid; gap: 4px; color: #aab4ad; font-size: 10px; }
-.board-context-schedule input { width: 100%; min-width: 0; height: 29px; box-sizing: border-box; padding: 0 5px; border: 1px solid #354139; border-radius: 4px; background: #101512; color: #e5ebe7; font-size: 10px; }
-/* Antes estos botones vivían dentro de .board-context-menu; ahora el panel es un submenú portaleado. */
-.board-context-schedule > button { display: flex; align-items: center; gap: 7px; min-height: 31px; padding: 0 7px; border: 0; border-radius: 4px; background: #202722; color: #dce5de; text-align: left; font-size: 10px; cursor: pointer; }
-.board-context-schedule > button:hover:not(:disabled) { background: #29332c; }
-.board-context-schedule > button:disabled { opacity: .45; cursor: default; }
+.board-context-schedule { display: grid; gap: 7px; margin: 4px 0; padding: 7px 5px; border-block: 1px solid #303a33; }
+.board-context-schedule-actions { display: grid; gap: 4px; }
+.board-context-schedule-actions > button { display: flex; align-items: center; gap: 7px; min-height: 31px; padding: 0 7px; border: 0; border-radius: 4px; background: #202722; color: #dce5de; text-align: left; font-size: 10px; cursor: pointer; }
+.board-context-schedule-actions > button:hover:not(:disabled) { background: #29332c; }
+.board-context-schedule-actions > button:disabled { opacity: .45; cursor: default; }
 
 .post-copy-dialog { width: min(430px, calc(100vw - 32px)); }
 .post-copy-presets { display: flex; gap: 6px; flex-wrap: wrap; }
