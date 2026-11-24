@@ -11,7 +11,7 @@ Solo la última versión publicada recibe correcciones de seguridad.
 | `0.5.x` (actual) | Compatible |
 | `< 0.5` | Sin soporte |
 
-Si usas una versión anterior, actualiza desde **Acerca de / Actualizaciones → Buscar actualización** antes de reportar un problema.
+Si usas una versión anterior, actualiza desde **Ajustes → Actualizaciones → Buscar actualizaciones** antes de reportar un problema.
 
 ## Reportar una vulnerabilidad
 

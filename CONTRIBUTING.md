@@ -17,7 +17,7 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-En desarrollo, **Acerca de / Actualizaciones** indica que el updater no está disponible: `electron-updater` solo se activa en la app empaquetada.
+En desarrollo, **Ajustes → Actualizaciones** indica que el updater no está disponible: `electron-updater` solo se activa en la app empaquetada.
 
 ## Flujo de trabajo
 

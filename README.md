@@ -44,7 +44,7 @@ En la sección **Assets**, descarga **`caballocci-Setup-<version>-x64.exe`**.
 > [!NOTE]
 > Mientras el proyecto no disponga de certificado de firma de código, Windows puede mostrar una advertencia de SmartScreen. Verifica que el instalador provenga de [github.com/gattocci/caballocci](https://github.com/gattocci/caballocci) antes de ejecutarlo. Consulta la [política de seguridad](SECURITY.md) para más detalles.
 
-Las actualizaciones posteriores se ofrecen dentro de **Acerca de / Actualizaciones**. Tanto la descarga como la instalación requieren confirmación explícita del usuario; antes de actualizar se crea un backup automático.
+Las actualizaciones posteriores se ofrecen dentro de **Ajustes → Actualizaciones**. Tanto la descarga como la instalación requieren confirmación explícita del usuario; antes de actualizar se crea un backup automático.
 
 ## ¿Qué es caballocci?
 
@@ -85,7 +85,7 @@ Está pensada para creadores y equipos pequeños que quieren:
 
 caballocci no publica por ti: exporta álbumes listos para usar desde el teléfono.
 
-1. **Exportar en caballocci** — desde el editor (publicación abierta), desde el tablero (selección múltiple) o desde **Acerca de / Actualizaciones → Exportar todas las publicaciones**. Los álbumes quedan en `pc-outbox/publications/` y se registran en `pc-outbox/catalog.json`.
+1. **Exportar en caballocci** — desde el editor (publicación abierta), desde el tablero (selección múltiple) o desde **Ajustes → App Android de caballocci → Exportar todas las publicaciones**. Los álbumes quedan en `pc-outbox/publications/` y se registran en `pc-outbox/catalog.json`.
 2. **Recibir y marcar en Android** — la app complementaria ([`companion-apps/mobile-sync`](companion-apps/mobile-sync)) muestra los destinos pendientes y permite marcarlos como usados.
 3. **Importar en caballocci** — las confirmaciones en `android-inbox/<dispositivo>/` se importan y aparecen como `used` en el catálogo.
 
@@ -106,7 +106,7 @@ Los datos viven en el directorio `userData` de Electron, **fuera de la instalaci
 | Biblioteca copiada | `%APPDATA%\caballocci\Media` |
 | Backups | `%APPDATA%\caballocci\Backups` |
 
-En Windows, `userData` suele estar bajo `%APPDATA%\caballocci`; la ruta efectiva se muestra en **Acerca de / Actualizaciones**. La migración desde `content-planner.sqlite` (versiones anteriores) copia la base antigua sin eliminar el original.
+En Windows, `userData` suele estar bajo `%APPDATA%\caballocci`; la ruta efectiva se muestra en **Ajustes → Workspace**. La migración desde `content-planner.sqlite` (versiones anteriores) copia la base antigua sin eliminar el original.
 
 ## Arquitectura
 
@@ -142,7 +142,7 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-En desarrollo, **Acerca de / Actualizaciones** informa que el updater no está disponible (`electron-updater` solo se activa en aplicaciones empaquetadas).
+En desarrollo, **Ajustes → Actualizaciones** informa que el updater no está disponible (`electron-updater` solo se activa en aplicaciones empaquetadas).
 
 Para validar y generar el instalador local:
 

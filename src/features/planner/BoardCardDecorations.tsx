@@ -46,7 +46,7 @@ export function MobileCardStatus({ state, postId, detailLevel }: { state: Mobile
           : 'En catálogo móvil'
     : previous ? 'Exportada antes' : 'No exportada'
   const title = current && progress?.retirementPending
-    ? 'La PC recibió la señal de retiro; falta revisar y confirmar la conciliación del catálogo en Acerca de / Actualizaciones → App Android de caballocci.'
+    ? 'La PC recibió la señal de retiro; falta revisar y confirmar la conciliación del catálogo en Ajustes → App Android de caballocci.'
     : current && progress?.awaitingConfirmation
       ? progress.used
         ? `${progress.used} de ${progress.destinations} destinos confirmados como usados; falta confirmar los restantes en el móvil.`
