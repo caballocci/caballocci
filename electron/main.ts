@@ -898,9 +898,12 @@ async function createWindow() {
   mainWindow.webContents.on('will-redirect', preventUntrustedNavigation)
   mainWindow.webContents.on('will-attach-webview', event => event.preventDefault())
 
-  if (devServerUrl) await mainWindow.loadURL(devServerUrl)
-  else await mainWindow.loadFile(rendererFilePath)
-  mainWindow.once('ready-to-show', () => {
+  let splashDismissed = false
+  let splashFallback: ReturnType<typeof setTimeout> | undefined
+  const dismissSplash = () => {
+    if (splashDismissed) return
+    splashDismissed = true
+    if (splashFallback) clearTimeout(splashFallback)
     void (async () => {
       const minimumSplashDurationMs = 4_500
       const remainingMs = Math.max(0, minimumSplashDurationMs - (Date.now() - splashShownAt))
@@ -910,7 +913,14 @@ async function createWindow() {
       if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
       splashWindow = null
     })()
-  })
+  }
+  // Registrar el evento antes de cargar: con el servidor de desarrollo puede dispararse
+  // mientras loadURL todavía está resolviendo y perderse, dejando el splash visible para siempre.
+  mainWindow.once('ready-to-show', dismissSplash)
+  splashFallback = setTimeout(dismissSplash, 8_000)
+
+  if (devServerUrl) await mainWindow.loadURL(devServerUrl)
+  else await mainWindow.loadFile(rendererFilePath)
 }
 
 app.setAppUserModelId('com.caballocci.desktop')
