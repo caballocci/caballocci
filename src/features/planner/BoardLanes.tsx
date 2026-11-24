@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { MobileCardStatus, PostMarkBadges, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
+import { MobileCardStatus, PostMarks, type BoardCardDetailLevel, type MobilePublicationState } from './BoardCardDecorations'
 import { StackClosedCard, StackExpandedList, type StackHandlers } from './BoardStacks'
 import { withClipboardPayload } from '../../shared/clipboard-payload'
-import { BoardContextMenu, BoardContextSelectionActions } from './BoardContextMenu'
+import { BoardContextMenu, BoardContextSelectionActions, BoardContextSeparator, BoardContextSubmenu } from './BoardContextMenu'
 import { PostCopyDialog } from './PostCopyDialog'
 import { ApplyFieldsDialog } from './ApplyFieldsDialog'
 import { reorderStackIds, resolveStackDropZone, type StackDropHover } from './stack-drop-zone'
@@ -12,7 +12,7 @@ import { PasteFormatHint } from './PasteFormatHint'
 import { availableParsedFields, groupPayloadPosts, isStructuredPostText, parsePostsFromText, readClipboardPayload, type ClipboardPasteSource, type ClipboardPostField, type ParsedPost } from '../../shared/clipboard-payload'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ArrowDown, ArrowUp, CalendarClock, CalendarDays, ChevronDown, ChevronRight, ChevronsRight, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers3, MoreHorizontal, Network, Plus, Replace, Trash2 } from 'lucide-react'
+import { Archive, ArrowDown, ArrowUp, CalendarClock, CalendarDays, ChevronDown, ChevronRight, ChevronsRight, ClipboardCopy, ClipboardPaste, Copy, FileText, Film, FolderOpen, FolderPlus, Images, Layers3, MoreHorizontal, Network, Plus, Replace, Trash2 } from 'lucide-react'
 import { contentLabels, stages, statusMeta } from '../../shared/constants'
 import { DEFAULT_POST_COLOR, isDefaultPostColor, postAccentColor, postColors } from '../../shared/postColors'
 import { interestLevelLabels, interestLevelNames, type PostInterestLevel } from '../../shared/post-marks'
@@ -663,7 +663,7 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
                 {post.scheduledAt && <small className={overdue ? 'overdue' : ''} title={format(parseISO(post.scheduledAt), 'd MMMM yyyy · HH:mm', { locale: es })}>
                   <CalendarDays size={12} /><span>{format(parseISO(post.scheduledAt), 'd MMM', { locale: es })}</span><time dateTime={post.scheduledAt}>{format(parseISO(post.scheduledAt), 'HH:mm')}</time>{overdue && <b>Atrasada</b>}
                 </small>}
-                {(dateMarks[post.id] || interestLevels[post.id]) && <PostMarkBadges dateMark={dateMarks[post.id]} interestLevel={interestLevels[post.id]} />}
+                {(dateMarks[post.id] || interestLevels[post.id]) && <PostMarks dateMark={dateMarks[post.id]} interestLevel={interestLevels[post.id]} />}
               </div>
             </article>
           }
@@ -724,22 +724,24 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
     const actionIds = context.ids
     const hasScheduledPosts = actionIds.some(id => postById.get(id)?.scheduledAt)
     const hasDateMarks = actionIds.some(id => dateMarks[id])
+    const canArchive = actionIds.some(id => postById.get(id)?.status !== 'archived')
     const close = () => setContext(null)
     return <BoardContextMenu x={context.x} y={context.y} label={`Acciones para ${context.post.title || 'publicación'}`}>
       <BoardContextSelectionActions
         count={actionIds.length}
-        canArchive={actionIds.some(id => postById.get(id)?.status !== 'archived')}
         hasScheduledPosts={hasScheduledPosts}
         scheduleAt={scheduleAt}
         scheduleWarning={scheduleWarning}
-        onArchive={() => { close(); onArchive(actionIds) }}
         onScheduleAtChange={onScheduleAtChange}
         onSchedule={() => { close(); onSchedule(actionIds) }}
         onClearSchedule={() => { close(); onClearSchedule(actionIds) }}
         onFormat={contentType => { close(); onFormat(actionIds, contentType) }}
       />
+      <BoardContextSeparator />
       <button type="button" role="menuitem" onClick={() => { onSelect(context.post.id); close() }}>{actionIds.length > 1 ? 'Editar esta publicación' : 'Abrir / editar publicación'}</button>
-      <button type="button" role="menuitem" onClick={() => { usePlanner.getState().requestConceptMapPosts(actionIds); close() }}><Network size={14} />Referenciar en mapa conceptual{actionIds.length > 1 ? ` (${actionIds.length})` : ''}</button>
+      <button type="button" role="menuitem" onClick={() => { void duplicatePost(context.post); close() }}><Copy size={14} />Duplicar publicación</button>
+      {actionIds.length > 1 && <button type="button" role="menuitem" onClick={() => { onEditSelection(); close() }}>Editar selección en pestañas</button>}
+      <BoardContextSeparator />
       <button type="button" role="menuitem" onClick={() => { usePlanner.getState().markPostsDate(actionIds); close() }}><CalendarClock size={14} />Registrar fecha{actionIds.length > 1 ? ` (${actionIds.length})` : ''}</button>
       {hasDateMarks && <button type="button" role="menuitem" onClick={() => { usePlanner.getState().clearPostsDateMark(actionIds); close() }}><CalendarClock size={14} />Quitar fecha registrada</button>}
       <button type="button" role="menuitem" aria-expanded={showInterest} onClick={() => setShowInterest(value => !value)}><ChevronsRight size={14} />Destacar…</button>
@@ -747,21 +749,26 @@ export function BoardLanes({ lanes, posts, activeGroups, selected, collapsedLane
         {([1, 2, 3] as PostInterestLevel[]).map(level => <button type="button" role="menuitem" key={level} onClick={() => { usePlanner.getState().setPostsInterest(actionIds, level); close() }}>{interestLevelLabels[level]} · {interestLevelNames[level]}</button>)}
         <button type="button" role="menuitem" onClick={() => { usePlanner.getState().setPostsInterest(actionIds, null); close() }}>Sin destacar</button>
       </div>}
-      {actionIds.length > 1 && <button type="button" role="menuitem" onClick={() => { onEditSelection(); close() }}>Editar selección en pestañas</button>}
-      <button type="button" role="menuitem" onClick={() => { void duplicatePost(context.post); close() }}><Copy size={14} />Duplicar publicación</button>
-      <button type="button" role="menuitem" onClick={() => { void runWithErrorReporting(() => window.planner.media.openFolder(context.post.id, context.post.project), 'No se pudo abrir la carpeta de media'); close() }}><FolderOpen size={14} />Abrir en el Explorador Windows</button>
-      <button type="button" role="menuitem" onClick={() => { onDelete(context.post); close() }}><Trash2 size={14} />Eliminar publicación</button>
-      <button type="button" role="menuitem" disabled={!context.post.caption.trim()} onClick={() => { const request = withClipboardPayload(context.post.caption, [{ kind: 'field', field: 'caption', text: context.post.caption, sourceId: context.post.id }]); void runWithErrorReporting(() => window.planner.clipboard.write(request.text, request.html), 'No se pudo copiar el texto'); close() }}><ClipboardCopy size={14} />Copiar texto</button>
-      <button type="button" role="menuitem" onClick={() => { setCopyPosts(actionIds.map(id => postById.get(id)).filter(post => post !== undefined)); close() }}><ClipboardCopy size={14} />{actionIds.length > 1 ? `Copiar ${actionIds.length} publicaciones…` : 'Copiar publicación…'}</button>
-      <button type="button" role="menuitem" disabled={!pastePreview} title={pasteMatch > 0 ? 'Cada bloque vuelve a su publicación original; también podés pegarlas como nuevas' : undefined} onClick={() => { if (pasteMatch > 0) onOpenPasteDialog(context.post); else void pastePosts(context.post); close() }}><ClipboardPaste size={14} />{pastePreview ? `Pegar ${pastePreview} ${pastePreview === 1 ? 'publicación' : 'publicaciones'}${pasteMatch > 0 ? '…' : ''}` : 'Pegar publicación'}</button>
-      <button type="button" role="menuitem" disabled={!applyPreview} title="Reemplaza los campos y anexa diapositivas de lo copiado" onClick={() => { setApplyTargets(actionIds.map(id => postById.get(id)).filter((post): post is Post => post !== undefined)); close() }}><Replace size={14} />{actionIds.length > 1 ? `Aplicar contenido a ${actionIds.length} publicaciones…` : 'Aplicar contenido copiado…'}</button>
-      <button type="button" role="menuitem" aria-expanded={showStatuses} onClick={() => setShowStatuses(value => !value)}><MoreHorizontal size={14} />Cambiar etapa…</button>
-      {showStatuses && <div className="board-context-statuses" role="group" aria-label="Cambiar etapa">{stages.filter(status => status !== context.post.status && (status !== 'scheduled' || Boolean(context.post.scheduledAt))).map(status => <button type="button" key={status} onClick={() => { onStatus(context.post, status); close(); setShowStatuses(false) }}>{statusMeta[status].label}</button>)}</div>}
-      <button type="button" role="menuitem" aria-expanded={showColors} onClick={() => setShowColors(value => !value)}><span className={`board-context-color-icon${isDefaultPostColor(context.post.color) ? ' is-default' : ''}`} style={{ backgroundColor: isDefaultPostColor(context.post.color) ? 'transparent' : context.post.color }} />Cambiar color…</button>
+      <button type="button" role="menuitem" aria-expanded={showStatuses} onClick={() => setShowStatuses(value => !value)}><MoreHorizontal size={14} />Etapa…</button>
+      {showStatuses && <div className="board-context-statuses" role="group" aria-label="Etapa">{stages.filter(status => status !== context.post.status && (status !== 'scheduled' || Boolean(context.post.scheduledAt))).map(status => <button type="button" key={status} onClick={() => { onStatus(context.post, status); close(); setShowStatuses(false) }}>{statusMeta[status].label}</button>)}</div>}
+      <button type="button" role="menuitem" aria-expanded={showColors} onClick={() => setShowColors(value => !value)}><span className={`board-context-color-icon${isDefaultPostColor(context.post.color) ? ' is-default' : ''}`} style={{ backgroundColor: isDefaultPostColor(context.post.color) ? 'transparent' : context.post.color }} />Color…</button>
       {showColors && <div className="board-context-color-options" role="group" aria-label="Colores de tarjeta">
         {postColors.map(color => <button type="button" key={color.value} aria-label={color.label} title={color.label} aria-pressed={context.post.color === color.value} style={{ backgroundColor: color.value }} onClick={() => { onColor(context.post, color.value); close() }} />)}
         <button type="button" className="board-context-color-reset" aria-pressed={isDefaultPostColor(context.post.color)} onClick={() => { onColor(context.post, DEFAULT_POST_COLOR); close() }}><i aria-hidden="true" />Sin color</button>
       </div>}
+      <BoardContextSeparator />
+      <BoardContextSubmenu label="Portapapeles…" icon={<ClipboardCopy size={14} />} ariaLabel="Portapapeles">
+        <button type="button" role="menuitem" disabled={!context.post.caption.trim()} onClick={() => { const request = withClipboardPayload(context.post.caption, [{ kind: 'field', field: 'caption', text: context.post.caption, sourceId: context.post.id }]); void runWithErrorReporting(() => window.planner.clipboard.write(request.text, request.html), 'No se pudo copiar el texto'); close() }}>Copiar texto</button>
+        <button type="button" role="menuitem" onClick={() => { setCopyPosts(actionIds.map(id => postById.get(id)).filter(post => post !== undefined)); close() }}>{actionIds.length > 1 ? `Copiar ${actionIds.length} publicaciones…` : 'Copiar publicación…'}</button>
+        <button type="button" role="menuitem" disabled={!pastePreview} title={pasteMatch > 0 ? 'Cada bloque vuelve a su publicación original; también podés pegarlas como nuevas' : undefined} onClick={() => { if (pasteMatch > 0) onOpenPasteDialog(context.post); else void pastePosts(context.post); close() }}><ClipboardPaste size={14} />{pastePreview ? `Pegar ${pastePreview} ${pastePreview === 1 ? 'publicación' : 'publicaciones'}${pasteMatch > 0 ? '…' : ''}` : 'Pegar publicación'}</button>
+        <button type="button" role="menuitem" disabled={!applyPreview} title="Reemplaza los campos y anexa diapositivas de lo copiado" onClick={() => { setApplyTargets(actionIds.map(id => postById.get(id)).filter((post): post is Post => post !== undefined)); close() }}><Replace size={14} />{actionIds.length > 1 ? `Aplicar contenido a ${actionIds.length} publicaciones…` : 'Aplicar contenido copiado…'}</button>
+      </BoardContextSubmenu>
+      <BoardContextSeparator />
+      <button type="button" role="menuitem" onClick={() => { usePlanner.getState().requestConceptMapPosts(actionIds); close() }}><Network size={14} />Referenciar en mapa conceptual{actionIds.length > 1 ? ` (${actionIds.length})` : ''}</button>
+      <button type="button" role="menuitem" onClick={() => { void runWithErrorReporting(() => window.planner.media.openFolder(context.post.id, context.post.project), 'No se pudo abrir la carpeta de media'); close() }}><FolderOpen size={14} />Abrir en el Explorador Windows</button>
+      <BoardContextSeparator />
+      <button type="button" role="menuitem" disabled={!canArchive} onClick={() => { close(); onArchive(actionIds) }}><Archive size={14} />Archivar {actionIds.length > 1 ? `selección (${actionIds.length})` : 'publicación'}</button>
+      <button type="button" role="menuitem" onClick={() => { onDelete(context.post); close() }}><Trash2 size={14} />Eliminar publicación</button>
     </BoardContextMenu>
   })()}
   {statusMenu && <BoardContextMenu x={statusMenu.x} y={statusMenu.y} label={`Nueva publicación en ${statusMeta[statusMenu.status].label}`}>

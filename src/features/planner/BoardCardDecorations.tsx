@@ -46,7 +46,7 @@ export function MobileCardStatus({ state, postId, detailLevel }: { state: Mobile
           : 'En catálogo móvil'
     : previous ? 'Exportada antes' : 'No exportada'
   const title = current && progress?.retirementPending
-    ? 'La PC recibió la señal de retiro; falta revisar y confirmar la conciliación del catálogo en Acerca de / Actualizaciones → App Android de caballocci.'
+    ? 'La PC recibió la señal de retiro; falta revisar y confirmar la conciliación del catálogo en Ajustes → App Android de caballocci.'
     : current && progress?.awaitingConfirmation
       ? progress.used
         ? `${progress.used} de ${progress.destinations} destinos confirmados como usados; falta confirmar los restantes en el móvil.`
@@ -152,7 +152,7 @@ export function BoardCardColorPicker({ post, onColor }: { post: Post; onColor(co
   </div>
 }
 
-// Un solo temporizador para todas las insignias del tablero, no uno por tarjeta.
+// Un solo temporizador para todas las marcas del tablero, no uno por tarjeta.
 const clockListeners = new Set<() => void>()
 let clockTimer: number | undefined
 function subscribeClock(listener: () => void) {
@@ -169,8 +169,8 @@ function useNow() {
   return now
 }
 
-/** Insignias personales de la tarjeta: tiempo desde la fecha registrada y destacado. */
-export function PostMarkBadges({ dateMark, interestLevel }: { dateMark?: string; interestLevel?: PostInterestLevel }) {
+/** Marcas personales de la tarjeta: tiempo desde la fecha registrada y destacado. */
+export function PostMarks({ dateMark, interestLevel }: { dateMark?: string; interestLevel?: PostInterestLevel }) {
   const now = useNow()
   if (!dateMark && !interestLevel) return null
   return <div className="board-card-marks">

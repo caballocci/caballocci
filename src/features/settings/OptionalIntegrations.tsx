@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { AppWindow, ImagePlus, Play, Plus, RotateCcw, Square, Trash2 } from 'lucide-react'
 import { reportAppError, runWithErrorReporting } from '../../app/errors'
 import type { OptionalIntegration, OptionalIntegrationStatus } from '../../shared/types'
-
-const preferenceKey = 'caballocci.optional-integrations'
+import { optionalIntegrationsPreferenceKey } from '../../shared/preference-sync'
 
 function readIntegrations(value: string | undefined): OptionalIntegration[] {
   if (!value) return []
@@ -68,7 +67,9 @@ export function OptionalIntegrations() {
       window.planner.system.getOptionalIntegrationStatuses(),
     ]).then(([preferences, items]) => {
       if (!active) return
-      setIntegrations(readIntegrations(preferences[preferenceKey]))
+      const stored = preferences[optionalIntegrationsPreferenceKey]
+      if (stored !== undefined) localStorage.setItem(optionalIntegrationsPreferenceKey, stored)
+      setIntegrations(readIntegrations(stored))
       updateStatuses(items)
     }).catch(error => reportAppError(error, 'No se pudieron cargar las integraciones opcionales'))
     const timer = window.setInterval(() => setClock(Date.now()), 1_000)
@@ -92,7 +93,9 @@ export function OptionalIntegrations() {
   const saveIntegrations = async (next: OptionalIntegration[]) => {
     setSaving(true)
     try {
-      await window.planner.preferences.sync({ [preferenceKey]: JSON.stringify(next) })
+      const serialized = JSON.stringify(next)
+      await window.planner.preferences.sync({ [optionalIntegrationsPreferenceKey]: serialized })
+      localStorage.setItem(optionalIntegrationsPreferenceKey, serialized)
       setIntegrations(next)
     } finally {
       setSaving(false)

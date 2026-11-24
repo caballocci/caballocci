@@ -1,4 +1,16 @@
-/** Marcas personales separadas de Post: no cambian estado, programación ni prioridad. */
+/**
+ * Marcas personales de una publicación, separadas de `Post`: no cambian estado,
+ * programación ni prioridad. Hay dos ejes independientes y cada uno admite como
+ * máximo un valor por publicación.
+ *
+ * - Fecha (`POST_DATE_MARKS_KEY`): cuándo se registró la marca. Volver a marcar
+ *   reemplaza la fecha anterior; el tablero muestra el tiempo transcurrido.
+ * - Interés (`POST_INTEREST_KEY`): nivel ordinal `>` / `>>` / `>>>`. Las tres
+ *   flechas son niveles de este único eje, no tres marcas independientes.
+ *
+ * No hay un tercer eje definido. Cualquier marca nueva debe describirse aquí
+ * antes de implementarse: qué pregunta responde, qué valores admite y cómo se quita.
+ */
 
 export const POST_DATE_MARKS_KEY = 'caballocci.post-date-marks'
 export const POST_INTEREST_KEY = 'caballocci.post-interest'
