@@ -77,7 +77,7 @@ export function AboutUpdates() {
 
   const busy = update?.status === 'checking' || update?.status === 'downloading' || update?.status === 'installing'
   return <section className="workspace about-workspace">
-    <ViewHeading title="Acerca de / Actualizaciones" subtitle="Versión, datos locales y actualizaciones de caballocci." />
+    <ViewHeading title="Ajustes" subtitle="Preferencias, actualizaciones y datos locales de caballocci." />
     <div className="about-layout">
       <section className="settings-section">
         <div className="settings-heading"><div><span>PERSONALIZACIÓN</span><h2>Etiquetas de colecciones</h2></div></div>
@@ -91,7 +91,7 @@ export function AboutUpdates() {
         <label className="collection-date-setting"><input type="checkbox" checked={behavior?.autostart ?? false} disabled={!behavior} onChange={() => toggleBehavior('autostart')} /><span><strong>Iniciar con Windows</strong><small>Desactivado por defecto. Si lo activas, caballocci se abre al iniciar sesión.</small></span></label>
       </section>
       <section className="settings-section">
-        <div className="settings-heading"><div><span>APLICACIÓN</span><h2>caballocci</h2></div><strong>v{info?.version || update?.installedVersion || '...'}</strong></div>
+        <div className="settings-heading"><div><span>ACTUALIZACIONES</span><h2>caballocci</h2></div><strong>v{info?.version || update?.installedVersion || '...'}</strong></div>
         <div className={`update-state ${update?.status || 'idle'}`}><div><strong>{update?.message || 'Consultando estado...'}</strong>{update?.availableVersion && <small>Versión disponible: {update.availableVersion}</small>}</div></div>
         {update?.status === 'downloading' && <div className="download-progress"><div><span>Descarga</span><b>{Math.round(update.percent || 0)}%</b></div><progress max="100" value={update.percent || 0} /><small>{formatBytes(update.transferred)} de {formatBytes(update.total)}</small></div>}
         <div className="settings-actions">
@@ -125,7 +125,7 @@ export function AboutUpdates() {
         {backupMessage && <p className="settings-note success">{backupMessage}</p>}
       </section>
       <section className="settings-section app-information">
-        <div className="settings-heading"><div><span>DATOS LOCALES</span><h2>Esta instalación</h2></div><strong>v{info?.version || '...'}</strong></div>
+        <div className="settings-heading"><div><span>ACERCA DE</span><h2>Esta instalación</h2></div><strong>v{info?.version || '...'}</strong></div>
         <p className="settings-note">Información técnica y resumen de los datos guardados localmente. No se envía a ningún servicio.</p>
         <dl className="app-information-grid">
           <div><dt>Entorno</dt><dd>{info ? info.packaged ? 'Aplicación instalada' : 'Desarrollo' : '...'}</dd></div>

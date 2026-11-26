@@ -575,12 +575,12 @@ export function Editor({ initial, scheduledAtForNew = null, initialStatusForNew 
             <p className="media-export-note">Esta acción envía <strong>solo esta publicación</strong> al mismo catálogo que usa la app Android. Sus medios se exportan con la misma rutina y orden visual que en los envíos por lote; el álbum queda dentro de <code>pc-outbox/publications/</code> y se registra en <code>pc-outbox/catalog.json</code>.</p>
             <p className="media-export-folder"><FolderOpen size={13} /><strong>{phoneExportFolder || 'Aún no elegiste una carpeta de destino'}</strong></p>
             <div className="media-export-actions"><button type="button" className="media-phone-button" disabled={!initial || !draft.id || saving || phoneExportBusy} onClick={() => void exportToPhone()}><Smartphone size={15} /> {phoneExportBusy ? 'Enviando…' : 'Guardar y enviar al celular'}</button><button type="button" className="media-export-destination" disabled={saving || phoneExportBusy} onClick={() => void exportToPhone(true)}><FolderOpen size={15} /> Elegir raíz compartida</button></div>
-            <p className="media-export-note">La raíz compartida se configura una sola vez y se usa también en <strong>Acerca de / Actualizaciones</strong>; no hacen falta dos carpetas. Comparte la raíz como <strong>Enviar y recibir</strong> en Syncthing del PC y Android. En la app móvil selecciona esa raíz, no <code>pc-outbox/</code>.</p>
+            <p className="media-export-note">La raíz compartida se configura una sola vez y se usa también en <strong>Ajustes → App Android de caballocci</strong>; no hacen falta dos carpetas. Comparte la raíz como <strong>Enviar y recibir</strong> en Syncthing del PC y Android. En la app móvil selecciona esa raíz, no <code>pc-outbox/</code>.</p>
             <details className="media-transfer-help">
               <summary>Configurar el envío de álbumes con Syncthing</summary>
               <ol>
                 <li>Instala Syncthing en el PC y un cliente compatible en Android; conecta los dispositivos con su QR o identificador.</li>
-                <li>En caballocci, pulsa <strong>Elegir raíz compartida</strong> para seleccionar la carpeta de Syncthing que se configura también en Acerca de / Actualizaciones.</li>
+                <li>En caballocci, pulsa <strong>Elegir raíz compartida</strong> para seleccionar la carpeta de Syncthing que se configura también en Ajustes → App Android de caballocci.</li>
                 <li>En Syncthing del PC y Android, comparte/acepta esa misma raíz en modo <strong>Enviar y recibir</strong>. En Android, elige una ubicación local, por ejemplo <code>Pictures/Caballocci</code>; las rutas pueden ser distintas.</li>
                 <li>Pulsa <strong>Guardar y enviar al celular</strong>. caballocci crea el álbum bajo <code>pc-outbox/publications/</code> y actualiza el catálogo que lee la app.</li>
               </ol>
@@ -603,15 +603,15 @@ Android: Pictures/Caballocci/     ← ubicación local de esa raíz
                   <p>La app muestra publicaciones por destino y permite devolver a caballocci las confirmaciones de uso. El editor, la selección del tablero y la exportación global comparten la raíz y el catálogo:</p>
                   <ol>
                     <li>Instala la app en Android con el APK oficial.</li>
-                    <li>En <strong>Acerca de / Actualizaciones → App Android de caballocci</strong>, configura la raíz compartida. Es la misma carpeta que aparece arriba; no configures otra raíz para el editor.</li>
+                    <li>En <strong>Ajustes → App Android de caballocci</strong>, configura la raíz compartida. Es la misma carpeta que aparece arriba; no configures otra raíz para el editor.</li>
                     <li>Pulsa <strong>Exportar todas las publicaciones</strong>. caballocci recorre las publicaciones no archivadas con medios y al menos un destino cuyo estado no sea Publicado ni No aplica; genera <code>pc-outbox/catalog.json</code> y los álbumes que referencia.</li>
                     <li>Configura esa raíz como <strong>Enviar y recibir</strong> en Syncthing del PC y Android, y selecciónala en la app móvil. Syncthing replica <code>pc-outbox/</code>; la app escribe las confirmaciones en <code>android-inbox/</code>.</li>
                   </ol>
                   <div className="media-mobile-app-actions">
                     <MobileAppDownload className="media-transfer-download" label="Descargar app Android (APK)" />
-                    <span>La configuración se hace en Acerca de / Actualizaciones.</span>
+                    <span>La configuración se hace en Ajustes → App Android de caballocci.</span>
                   </div>
-                  <p>Si usas ambas opciones con la misma raíz, los álbumes exportados por separado quedan fuera de <code>pc-outbox/</code> y no aparecen en el catálogo móvil. Para que la app Android muestre una publicación, exporta desde Acerca de / Actualizaciones. No compartas la base de datos del PC.</p>
+                  <p>Si usas ambas opciones con la misma raíz, los álbumes exportados por separado quedan fuera de <code>pc-outbox/</code> y no aparecen en el catálogo móvil. Para que la app Android muestre una publicación, exporta desde Ajustes → App Android de caballocci. No compartas la base de datos del PC.</p>
                 </div>
               </details>
             </details>

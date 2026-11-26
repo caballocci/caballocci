@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { reportAppError, runWithErrorReporting } from '../../app/errors'
+import { PLANNER_SCHEDULE_HISTORY_KEY, recordScheduleHistory } from '../../shared/schedule-picker'
 import { usePlanner } from '../../app/store'
 import { useSelection } from '../../app/useSelection'
 import { statusMeta } from '../../shared/constants'
@@ -77,7 +78,10 @@ export function useBoardSelection({ allPosts, query, activeSpace, selectedWorkGr
       const targets = postIds.map(id => allPosts.find(post => post.id === id)).filter((post): post is Post => Boolean(post))
       const changed = targets.filter(post => post.scheduledAt !== scheduledAt || post.status !== 'scheduled')
       for (const post of changed) await usePlanner.getState().save({ ...post, scheduledAt, status: 'scheduled' })
-      if (changed.length) usePlanner.getState().groupRecentUndoActions(changed.length, `Programar ${changed.length} publicaciones`)
+      if (changed.length) {
+        usePlanner.getState().groupRecentUndoActions(changed.length, `Programar ${changed.length} publicaciones`)
+        recordScheduleHistory(PLANNER_SCHEDULE_HISTORY_KEY, scheduledAt)
+      }
       setBulkScheduleAt('')
       setBulkScheduleWarning('')
       clear()

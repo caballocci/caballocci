@@ -8,7 +8,7 @@ Este documento define cómo deben escribirse las notas de versión (release note
 | --- | --- | --- |
 | Web de GitHub (página del release) | El `body` de la Release, renderizado como GitHub Flavored Markdown (GFM) | Markdown GFM válido, sin HTML crudo problemático |
 | App de escritorio (modal «Actualización disponible») | `releaseNotes` = `body` del release, renderizado como markdown sin HTML crudo; la UI quita encabezados duplicados y usa el primer párrafo como resumen | Ver «Reglas de compatibilidad» |
-| App de escritorio (Acerca de / Actualizaciones) | El mismo texto, en un bloque «Ver novedades» | Idem |
+| App de escritorio (Ajustes → Actualizaciones) | El mismo texto, en un bloque «Ver novedades» | Idem |
 | App Android complementaria | No lee el cuerpo del release; solo consulta `GET /releases/latest` para el `version`, `minimumSupportedVersion`, el asset `caballocci-android.apk` y `releaseUrl` | Sin requisitos sobre el texto del cuerpo |
 | `electron-updater` (feed de actualización) | Compara versiones vía `latest.yml`; el texto de las notas viaja en el `body` del release | El `body` puede ir vacío, pero entonces el modal oculta la sección de novedades: no es deseable |
 
@@ -54,7 +54,7 @@ El instalador y `latest.yml` llevan la versión en `version` y debe coincidir co
 
 ## Instalación y actualización
 - Descarga `caballocci-Setup-X.Y.Z-x64.exe` desde Assets. Los instaladores no están firmados: Windows puede mostrar SmartScreen; verifica el origen.
-- Desde la app: Acerca de / Actualizaciones. Se crea un backup automático antes de actualizar.
+- Desde la app: Ajustes → Actualizaciones. Se crea un backup automático antes de actualizar.
 
 ## Changelog completo
 - [`CHANGELOG.md`](https://github.com/gattocci/caballocci/blob/main/CHANGELOG.md) · [compare vPREV...vX.Y.Z](https://github.com/gattocci/caballocci/compare/vPREV...vX.Y.Z)
